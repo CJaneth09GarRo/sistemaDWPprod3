@@ -36,7 +36,24 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("CanManageAttendance", policy =>
+    {
+        policy.RequireAssertion(context =>
+        {
+            var role = context.User.FindFirst(ClaimTypes.Role)?.Value;
+            if (string.IsNullOrWhiteSpace(role))
+            {
+                return false;
+            }
+
+            return role.Equals("Maestro", StringComparison.OrdinalIgnoreCase)
+                || role.Equals("Administrador", StringComparison.OrdinalIgnoreCase)
+                || role.Equals("Admin", StringComparison.OrdinalIgnoreCase);
+        });
+    });
+});
 builder.Services.AddSingleton<DapperContext>();
 
 var app = builder.Build();
@@ -109,7 +126,7 @@ app.MapGet("/api/materias", async (DapperContext db) =>
 {
     var materias = await db.QueryAsync<Materia>("SELECT * FROM materia ORDER BY nombre_materia");
     return Results.Ok(materias);
-});
+}).RequireAuthorization();
 
 // ============ ASISTENCIAS ============
 
@@ -137,7 +154,7 @@ app.MapGet("/api/asistencias/{materiaId}/{anio}/{mes}", async (int materiaId, in
     var result = await db.QueryAsync<AsistenciaDto>(sql, 
         new { MateriaId = materiaId, Anio = anio, Mes = mes });
     return Results.Ok(result);
-});
+}).RequireAuthorization();
 
 // Registrar o actualizar asistencia
 app.MapPost("/api/asistencias", async (AsistenciaRegistroDto dto, DapperContext db) =>
@@ -154,7 +171,7 @@ app.MapPost("/api/asistencias", async (AsistenciaRegistroDto dto, DapperContext 
 
     await db.ExecuteAsync(sql, dto);
     return Results.Ok(new { mensaje = "Asistencia registrada o actualizada" });
-});
+}).RequireAuthorization("CanManageAttendance");
 
 // Eliminar asistencia
 app.MapDelete("/api/asistencias/{id}", async (int id, DapperContext db) =>
@@ -167,7 +184,7 @@ app.MapDelete("/api/asistencias/{id}", async (int id, DapperContext db) =>
     }
     
     return Results.Ok(new { mensaje = "Asistencia eliminada" });
-});
+    }).RequireAuthorization("CanManageAttendance");
 
 // Obtener alumnos por materia
 app.MapGet("/api/alumnos-materia/{materiaId}", async (int materiaId, DapperContext db) =>
@@ -181,7 +198,7 @@ app.MapGet("/api/alumnos-materia/{materiaId}", async (int materiaId, DapperConte
     
     var result = await db.QueryAsync<Usuario>(sql, new { MateriaId = materiaId });
     return Results.Ok(result);
-});
+}).RequireAuthorization("CanManageAttendance");
 
 app.Run();
 

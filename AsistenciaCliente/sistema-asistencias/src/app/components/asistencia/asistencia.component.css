@@ -4,6 +4,13 @@
       background: linear-gradient(135deg, #f8f9fa 0%, #f0f2f5 100%);
       min-height: 100vh;
     }
+    .header-card {
+      background: white;
+      border-radius: 20px;
+      padding: 20px 24px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+      margin-bottom: 24px;
+    }
     h2 {
       color: #ff6b9d;
       margin-bottom: 30px;
@@ -133,6 +140,22 @@
       background: white;
       border-radius: 25px;
       margin-top: 30px;
+    }
+    .empty-state {
+      text-align: center;
+      margin-top: 20px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      color: #666;
+      background: #ffffff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .error-message {
+      margin-top: 18px;
+      background: #ffebee;
+      color: #c62828;
+      padding: 12px 14px;
+      border-radius: 12px;
     }
     .icono {
       font-size: 4rem;

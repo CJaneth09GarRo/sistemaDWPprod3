@@ -8,6 +8,7 @@ import { AuthService } from '../../services/auth.service';
   selector: 'app-login',
   standalone: true,
   imports: [FormsModule, CommonModule, RouterModule],
+  styleUrl: './login.component.css',
   template: `
     <div class="login-container">
       <div class="login-card" [class.animada]="cardAnimada"
@@ -48,7 +49,7 @@ export class LoginComponent {
   cargando = false;         // ✅ estado de carga
   cardAnimada = false;
 
-  constructor(private authService: AuthService, private router: Router) {}
+  constructor(private authService: AuthService, private router: Router) { }
 
   onSubmit() {
     if (this.cargando) return;

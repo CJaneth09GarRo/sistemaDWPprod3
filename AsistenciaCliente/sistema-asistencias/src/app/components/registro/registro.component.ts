@@ -8,6 +8,7 @@ import { AuthService } from '../../services/auth.service';
   selector: 'app-registro',
   standalone: true,
   imports: [FormsModule, CommonModule, RouterModule],
+  styleUrl: './registro.component.css',
   template: `
     <div class="registro-container">
       <div class="registro-card">
@@ -69,7 +70,7 @@ export class RegistroComponent {
   error = '';
   cargando = false;
 
-  constructor(private authService: AuthService, private router: Router) {}
+  constructor(private authService: AuthService, private router: Router) { }
 
   onSubmit() {
     if (this.cargando) return;
