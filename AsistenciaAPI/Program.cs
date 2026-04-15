@@ -62,11 +62,21 @@ app.UseCors("AllowAngular");
 app.UseAuthentication();
 app.UseAuthorization();
 
+await PrepareDatabaseAsync(app.Services, app.Logger);
+
 // ============ LOGIN ============
 app.MapPost("/api/auth/login", async (LoginDto login, DapperContext db) =>
 {
-    var sql = "SELECT * FROM usuario WHERE correo = @Correo";
-    var usuario = await db.QueryFirstOrDefaultAsync<Usuario>(sql, new { Correo = login.Correo });
+    var correo = NormalizeEmail(login.Correo);
+    if (string.IsNullOrWhiteSpace(correo) || string.IsNullOrWhiteSpace(login.Contrasena))
+    {
+        return Results.BadRequest(new { mensaje = "Correo y contraseña son obligatorios" });
+    }
+
+    var sql = @"SELECT id, correo, nombre, edad, rol, contrasenahash
+                FROM usuario
+                WHERE lower(correo) = @Correo";
+    var usuario = await db.QueryFirstOrDefaultAsync<Usuario>(sql, new { Correo = correo });
 
     if (usuario is null)
     {
@@ -96,14 +106,27 @@ app.MapPost("/api/auth/login", async (LoginDto login, DapperContext db) =>
 // ============ REGISTRO ============
 app.MapPost("/api/auth/registro", async (RegistroDto dto, DapperContext db) =>
 {
+    var correo = NormalizeEmail(dto.Correo);
+    if (string.IsNullOrWhiteSpace(correo) || string.IsNullOrWhiteSpace(dto.Nombre) || string.IsNullOrWhiteSpace(dto.Contrasena))
+    {
+        return Results.BadRequest(new { mensaje = "Correo, nombre y contraseña son obligatorios" });
+    }
+
+    if (dto.Contrasena.Length < 6)
+    {
+        return Results.BadRequest(new { mensaje = "La contraseña debe tener al menos 6 caracteres" });
+    }
+
     var existe = await db.ExecuteScalarAsync<long>(
-        "SELECT COUNT(1) FROM usuario WHERE correo = @Correo",
-        new { Correo = dto.Correo });
+        "SELECT COUNT(1) FROM usuario WHERE lower(correo) = @Correo",
+        new { Correo = correo });
 
     if (existe > 0)
     {
         return Results.BadRequest(new { mensaje = "El correo ya está registrado" });
     }
+
+    var rolRegistro = NormalizePublicRole(dto.Rol);
 
     // Guardar contraseña directamente (texto plano)
     var sql = @"INSERT INTO usuario (correo, nombre, edad, rol, contrasenahash) 
@@ -111,15 +134,17 @@ app.MapPost("/api/auth/registro", async (RegistroDto dto, DapperContext db) =>
 
     await db.ExecuteAsync(sql, new
     {
-        Correo = dto.Correo,
-        Nombre = dto.Nombre,
+        Correo = correo,
+        Nombre = dto.Nombre.Trim(),
         Edad = dto.Edad,
-        Rol = string.IsNullOrEmpty(dto.Rol) ? "Alumno" : dto.Rol,
+        Rol = rolRegistro,
         Contrasena = dto.Contrasena
     });
 
     return Results.Ok(new { mensaje = "Usuario registrado exitosamente" });
 });
+
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", utc = DateTime.UtcNow }));
 
 // ============ MATERIAS ============
 app.MapGet("/api/materias", async (DapperContext db) =>
@@ -203,6 +228,43 @@ app.MapGet("/api/alumnos-materia/{materiaId}", async (int materiaId, DapperConte
 app.Run();
 
 // ============ FUNCIONES ============
+string NormalizeEmail(string? email)
+{
+    return (email ?? string.Empty).Trim().ToLowerInvariant();
+}
+
+string NormalizePublicRole(string? role)
+{
+    var normalized = (role ?? string.Empty).Trim();
+    if (normalized.Equals("Maestro", StringComparison.OrdinalIgnoreCase))
+    {
+        return "Maestro";
+    }
+
+    if (normalized.Equals("Secretario", StringComparison.OrdinalIgnoreCase))
+    {
+        return "Secretario";
+    }
+
+    // Bloquea escalamiento de privilegios por registro público.
+    return "Alumno";
+}
+
+async Task PrepareDatabaseAsync(IServiceProvider services, ILogger logger)
+{
+    try
+    {
+        var db = services.GetRequiredService<DapperContext>();
+        await db.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_usuario_correo_lower ON usuario ((lower(correo)))");
+        await db.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_asistencia_materia_fecha ON asistencia (materia_id, fecha)");
+        await db.ExecuteScalarAsync<int>("SELECT 1");
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "No se pudo preparar la base de datos al iniciar la API");
+    }
+}
+
 string GenerarToken(Usuario usuario)
 {
     var claims = new[]
