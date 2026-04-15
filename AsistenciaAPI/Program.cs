@@ -67,115 +67,81 @@ await PrepareDatabaseAsync(app.Services, app.Logger);
 // ============ LOGIN ============
 app.MapPost("/api/auth/login", async (LoginDto login, DapperContext db) =>
 {
-    try
+    var correo = NormalizeEmail(login.Correo);
+    if (string.IsNullOrWhiteSpace(correo) || string.IsNullOrWhiteSpace(login.Contrasena))
     {
-        var correo = NormalizeEmail(login.Correo);
-        if (string.IsNullOrWhiteSpace(correo) || string.IsNullOrWhiteSpace(login.Contrasena))
-        {
-            return Results.BadRequest(new { mensaje = "Correo y contraseña son obligatorios" });
-        }
-
-        var sql = @"SELECT id, correo, nombre, edad, rol, contrasenahash
-                    FROM usuario
-                    WHERE lower(correo) = @Correo";
-        var usuario = await db.QueryFirstOrDefaultAsync<Usuario>(sql, new { Correo = correo });
-
-        if (usuario is null)
-        {
-            return Results.Unauthorized();
-        }
-
-        // Verificar contraseña (texto plano)
-        if (usuario.Contrasenahash != login.Contrasena)
-        {
-            return Results.Unauthorized();
-        }
-
-        var token = GenerarToken(usuario);
-        return Results.Ok(new
-        {
-            token,
-            usuario = new
-            {
-                usuario.Id,
-                usuario.Nombre,
-                usuario.Correo,
-                usuario.Rol
-            }
-        });
+        return Results.BadRequest(new { mensaje = "Correo y contraseña son obligatorios" });
     }
-    catch (NpgsqlException)
+
+    var sql = @"SELECT id, correo, nombre, edad, rol, contrasenahash
+                FROM usuario
+                WHERE lower(correo) = @Correo";
+    var usuario = await db.QueryFirstOrDefaultAsync<Usuario>(sql, new { Correo = correo });
+
+    if (usuario is null)
     {
-        return Results.Problem(
-            detail: "No se pudo conectar con la base de datos.",
-            statusCode: StatusCodes.Status503ServiceUnavailable,
-            title: "Servicio de base de datos no disponible");
+        return Results.Unauthorized();
     }
-    catch (Exception)
+
+    // Verificar contraseña (texto plano)
+    if (usuario.Contrasenahash != login.Contrasena)
     {
-        return Results.Problem(
-            detail: "Ocurrió un error inesperado durante el inicio de sesión.",
-            statusCode: StatusCodes.Status500InternalServerError,
-            title: "Error interno");
+        return Results.Unauthorized();
     }
+
+    var token = GenerarToken(usuario);
+    return Results.Ok(new
+    {
+        token,
+        usuario = new
+        {
+            usuario.Id,
+            usuario.Nombre,
+            usuario.Correo,
+            usuario.Rol
+        }
+    });
 });
 
 // ============ REGISTRO ============
 app.MapPost("/api/auth/registro", async (RegistroDto dto, DapperContext db) =>
 {
-    try
+    var correo = NormalizeEmail(dto.Correo);
+    if (string.IsNullOrWhiteSpace(correo) || string.IsNullOrWhiteSpace(dto.Nombre) || string.IsNullOrWhiteSpace(dto.Contrasena))
     {
-        var correo = NormalizeEmail(dto.Correo);
-        if (string.IsNullOrWhiteSpace(correo) || string.IsNullOrWhiteSpace(dto.Nombre) || string.IsNullOrWhiteSpace(dto.Contrasena))
-        {
-            return Results.BadRequest(new { mensaje = "Correo, nombre y contraseña son obligatorios" });
-        }
-
-        if (dto.Contrasena.Length < 6)
-        {
-            return Results.BadRequest(new { mensaje = "La contraseña debe tener al menos 6 caracteres" });
-        }
-
-        var existe = await db.ExecuteScalarAsync<long>(
-            "SELECT COUNT(1) FROM usuario WHERE lower(correo) = @Correo",
-            new { Correo = correo });
-
-        if (existe > 0)
-        {
-            return Results.BadRequest(new { mensaje = "El correo ya está registrado" });
-        }
-
-        var rolRegistro = NormalizePublicRole(dto.Rol);
-
-        // Guardar contraseña directamente (texto plano)
-        var sql = @"INSERT INTO usuario (correo, nombre, edad, rol, contrasenahash) 
-                    VALUES (@Correo, @Nombre, @Edad, @Rol, @Contrasena)";
-
-        await db.ExecuteAsync(sql, new
-        {
-            Correo = correo,
-            Nombre = dto.Nombre.Trim(),
-            Edad = dto.Edad,
-            Rol = rolRegistro,
-            Contrasena = dto.Contrasena
-        });
-
-        return Results.Ok(new { mensaje = "Usuario registrado exitosamente" });
+        return Results.BadRequest(new { mensaje = "Correo, nombre y contraseña son obligatorios" });
     }
-    catch (NpgsqlException)
+
+    if (dto.Contrasena.Length < 6)
     {
-        return Results.Problem(
-            detail: "No se pudo conectar con la base de datos.",
-            statusCode: StatusCodes.Status503ServiceUnavailable,
-            title: "Servicio de base de datos no disponible");
+        return Results.BadRequest(new { mensaje = "La contraseña debe tener al menos 6 caracteres" });
     }
-    catch (Exception)
+
+    var existe = await db.ExecuteScalarAsync<long>(
+        "SELECT COUNT(1) FROM usuario WHERE lower(correo) = @Correo",
+        new { Correo = correo });
+
+    if (existe > 0)
     {
-        return Results.Problem(
-            detail: "Ocurrió un error inesperado durante el registro.",
-            statusCode: StatusCodes.Status500InternalServerError,
-            title: "Error interno");
+        return Results.BadRequest(new { mensaje = "El correo ya está registrado" });
     }
+
+    var rolRegistro = NormalizePublicRole(dto.Rol);
+
+    // Guardar contraseña directamente (texto plano)
+    var sql = @"INSERT INTO usuario (correo, nombre, edad, rol, contrasenahash) 
+                VALUES (@Correo, @Nombre, @Edad, @Rol, @Contrasena)";
+
+    await db.ExecuteAsync(sql, new
+    {
+        Correo = correo,
+        Nombre = dto.Nombre.Trim(),
+        Edad = dto.Edad,
+        Rol = rolRegistro,
+        Contrasena = dto.Contrasena
+    });
+
+    return Results.Ok(new { mensaje = "Usuario registrado exitosamente" });
 });
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok", utc = DateTime.UtcNow }));
@@ -386,16 +352,8 @@ public class DapperContext
 
     public DapperContext(IConfiguration config)
     {
-        var rawConnectionString = config.GetConnectionString("PostgreSQL") ??
+        _connectionString = config.GetConnectionString("PostgreSQL") ??
             "Host=localhost;Database=prdct3;Username=postgres;Password=password";
-
-        var csb = new NpgsqlConnectionStringBuilder(rawConnectionString)
-        {
-            Timeout = 3,
-            CommandTimeout = 15
-        };
-
-        _connectionString = csb.ConnectionString;
     }
 
     private NpgsqlConnection CreateConnection() => new NpgsqlConnection(_connectionString);
