@@ -75,21 +75,9 @@ app.MapPost("/api/auth/login", async (LoginDto login, DapperContext db) =>
             return Results.BadRequest(new { mensaje = "Correo y contraseña son obligatorios" });
         }
 
-        var roleNameColumn = await GetRoleNameColumnAsync(db);
-        var roleProjection = string.IsNullOrWhiteSpace(roleNameColumn)
-            ? "CAST(u.rol_id AS TEXT)"
-            : $"r.{QuoteIdentifier(roleNameColumn)}";
-
-        var sql = $@"SELECT
-                    u.id,
-                    u.correo,
-                    u.nombre,
-                    u.edad,
-                    COALESCE({roleProjection}, 'Alumno') AS rol,
-                    u.contrasenahash
-                FROM usuario u
-                LEFT JOIN rol r ON r.id = u.rol_id
-                WHERE lower(u.correo) = @Correo";
+        var sql = @"SELECT id, correo, nombre, edad, rol, contrasenahash
+                    FROM usuario
+                    WHERE lower(correo) = @Correo";
         var usuario = await db.QueryFirstOrDefaultAsync<Usuario>(sql, new { Correo = correo });
 
         if (usuario is null)
@@ -163,25 +151,17 @@ app.MapPost("/api/auth/registro", async (RegistroDto dto, DapperContext db, ILog
         }
 
         var rolRegistro = NormalizePublicRole(dto.Rol);
-        var rolId = await ResolveRoleIdAsync(db, rolRegistro);
-        if (rolId is null)
-        {
-            return Results.Problem(
-                detail: "No se pudo resolver el rol para el registro de usuario.",
-                statusCode: StatusCodes.Status500InternalServerError,
-                title: "Configuración de roles inválida");
-        }
 
         // Guardar contraseña directamente (texto plano)
-        var sql = @"INSERT INTO usuario (correo, nombre, edad, rol_id, contrasenahash)
-                    VALUES (@Correo, @Nombre, @Edad, @RolId, @Contrasena)";
+        var sql = @"INSERT INTO usuario (correo, nombre, edad, rol, contrasenahash) 
+                    VALUES (@Correo, @Nombre, @Edad, @Rol, @Contrasena)";
 
         await db.ExecuteAsync(sql, new
         {
             Correo = correo,
             Nombre = dto.Nombre.Trim(),
             Edad = dto.Edad,
-            RolId = rolId.Value,
+            Rol = rolRegistro,
             Contrasena = dto.Contrasena
         });
 
@@ -224,14 +204,13 @@ app.MapGet("/api/materias", async (DapperContext db) =>
 // Obtener asistencias por materia y mes
 app.MapGet("/api/asistencias/{materiaId}/{anio}/{mes}", async (int materiaId, int anio, int mes, DapperContext db) =>
 {
-    var presenceColumn = await GetAsistenciaPresenciaColumnAsync(db);
-    var sql = $@"
+    var sql = @"
         SELECT 
             a.id,
             a.usuario_id AS UsuarioId,
             a.materia_id AS MateriaId,
             a.fecha,
-            a.{QuoteIdentifier(presenceColumn)} AS presente,
+            a.presente,
             a.horas_impartidas AS HorasImpartidas,
             a.horas_asistidas AS HorasAsistidas,
             a.observacion,
@@ -254,14 +233,13 @@ app.MapPost("/api/asistencias", async (AsistenciaRegistroDto dto, DapperContext 
     try
     {
         var fecha = dto.Fecha.Date;
-        var presenceColumn = await GetAsistenciaPresenciaColumnAsync(db);
 
-        var filasActualizadas = await db.ExecuteAsync($@"
+        var filasActualizadas = await db.ExecuteAsync(@"
             UPDATE asistencia
             SET horas_impartidas = @HorasImpartidas,
                 horas_asistidas = @HorasAsistidas,
                 observacion = @Observacion,
-                {QuoteIdentifier(presenceColumn)} = @Presente
+                presente = @Presente
             WHERE usuario_id = @UsuarioId
               AND materia_id = @MateriaId
               AND fecha = @Fecha",
@@ -278,8 +256,8 @@ app.MapPost("/api/asistencias", async (AsistenciaRegistroDto dto, DapperContext 
 
         if (filasActualizadas == 0)
         {
-            await db.ExecuteAsync($@"
-                INSERT INTO asistencia (usuario_id, materia_id, fecha, horas_impartidas, horas_asistidas, observacion, {QuoteIdentifier(presenceColumn)})
+            await db.ExecuteAsync(@"
+                INSERT INTO asistencia (usuario_id, materia_id, fecha, horas_impartidas, horas_asistidas, observacion, presente)
                 VALUES (@UsuarioId, @MateriaId, @Fecha, @HorasImpartidas, @HorasAsistidas, @Observacion, @Presente)",
                 new
                 {
@@ -327,29 +305,14 @@ app.MapDelete("/api/asistencias/{id}", async (int id, DapperContext db) =>
 // Obtener alumnos por materia
 app.MapGet("/api/alumnos-materia/{materiaId}", async (int materiaId, DapperContext db) =>
 {
-    var rolAlumnoId = await ResolveRoleIdAsync(db, "Alumno");
-    if (rolAlumnoId is null)
-    {
-        return Results.Problem(
-            detail: "No se encontró el rol 'Alumno' en la tabla de roles.",
-            statusCode: StatusCodes.Status500InternalServerError,
-            title: "Configuración de roles inválida");
-    }
-
-    var roleNameColumn = await GetRoleNameColumnAsync(db);
-    var roleProjection = string.IsNullOrWhiteSpace(roleNameColumn)
-        ? "CAST(u.rol_id AS TEXT)"
-        : $"r.{QuoteIdentifier(roleNameColumn)}";
-
-    var sql = $@"
-        SELECT DISTINCT u.id, u.nombre, u.correo, COALESCE({roleProjection}, 'Alumno') AS rol
+    var sql = @"
+        SELECT DISTINCT u.id, u.nombre, u.correo, u.rol
         FROM usuario u
-        LEFT JOIN rol r ON r.id = u.rol_id
         INNER JOIN asistencia a ON u.id = a.usuario_id
-        WHERE u.rol_id = @RolAlumnoId AND a.materia_id = @MateriaId
+        WHERE u.rol = 'Alumno' AND a.materia_id = @MateriaId
         ORDER BY u.nombre";
     
-    var result = await db.QueryAsync<Usuario>(sql, new { MateriaId = materiaId, RolAlumnoId = rolAlumnoId.Value });
+    var result = await db.QueryAsync<Usuario>(sql, new { MateriaId = materiaId });
     return Results.Ok(result);
 }).RequireAuthorization("CanManageAttendance");
 
@@ -378,89 +341,11 @@ string NormalizePublicRole(string? role)
     return "Alumno";
 }
 
-string QuoteIdentifier(string identifier)
-{
-    if (string.IsNullOrWhiteSpace(identifier) || identifier.Any(ch => !(char.IsLetterOrDigit(ch) || ch == '_')))
-    {
-        throw new InvalidOperationException($"Identificador SQL no válido: {identifier}");
-    }
-
-    return $"\"{identifier}\"";
-}
-
-async Task<string?> GetRoleNameColumnAsync(DapperContext db)
-{
-    var columns = (await db.QueryAsync<string>(@"
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'rol'"))
-        .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-    var preferred = new[] { "nombre", "nombre_rol", "rol", "descripcion", "descripcion_rol" };
-    return preferred.FirstOrDefault(columns.Contains);
-}
-
-async Task<int?> ResolveRoleIdAsync(DapperContext db, string role)
-{
-    var normalizedRole = NormalizePublicRole(role);
-    var roleColumn = await GetRoleNameColumnAsync(db);
-    if (string.IsNullOrWhiteSpace(roleColumn))
-    {
-        return await db.QueryFirstOrDefaultAsync<int?>("SELECT id FROM rol ORDER BY id LIMIT 1");
-    }
-
-    var sql = $@"SELECT id
-                 FROM rol
-                 WHERE lower({QuoteIdentifier(roleColumn)}) = lower(@Role)
-                 LIMIT 1";
-    var roleId = await db.QueryFirstOrDefaultAsync<int?>(sql, new { Role = normalizedRole });
-
-    if (roleId is not null)
-    {
-        return roleId.Value;
-    }
-
-    if (normalizedRole.Equals("Secretario", StringComparison.OrdinalIgnoreCase))
-    {
-        roleId = await db.QueryFirstOrDefaultAsync<int?>(sql, new { Role = "Administrador" });
-        if (roleId is not null)
-        {
-            return roleId.Value;
-        }
-    }
-
-    return await db.QueryFirstOrDefaultAsync<int?>("SELECT id FROM rol ORDER BY id LIMIT 1");
-}
-
-async Task<string> GetAsistenciaPresenciaColumnAsync(DapperContext db)
-{
-    var columns = (await db.QueryAsync<string>(@"
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'asistencia'"))
-        .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-    if (columns.Contains("presente"))
-    {
-        return "presente";
-    }
-
-    if (columns.Contains("asistio"))
-    {
-        return "asistio";
-    }
-
-    throw new InvalidOperationException("La tabla asistencia no tiene columna de presencia compatible (presente/asistio).");
-}
-
 async Task PrepareDatabaseAsync(IServiceProvider services, ILogger logger)
 {
     try
     {
         var db = services.GetRequiredService<DapperContext>();
-
         await db.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_usuario_correo_lower ON usuario ((lower(correo)))");
         await db.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_asistencia_materia_fecha ON asistencia (materia_id, fecha)");
         await db.ExecuteScalarAsync<int>("SELECT 1");
