@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@angular/common": "^21.2.8",
+    "@angular/core": "^21.2.8",
+    "@angular/forms": "^21.2.8",
+    "@angular/router": "^21.2.8"
+  }
+}

@@ -1,0 +1,138 @@
+/* You can add global styles to this file, and also import other style files */
+    /* Estilos globales */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', 'Tahoma', 'Geneva', 'Verdana', sans-serif;
+  background: linear-gradient(135deg, #fdf4f9 0%, #ffe9f0 100%);
+  min-height: 100vh;
+}
+
+/* Animaciones globales */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-fade {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.animate-slide {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* Scrollbar personalizada */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #ffe0e8;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #ff6b9d 0%, #ff9a9e 100%);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #ff6b9d;
+}
+.navbar {
+      background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+      padding: 1rem 0;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+    .nav-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 20px;
+    }
+    .logo {
+      cursor: pointer;
+    }
+    .logo-text {
+      font-size: 1.5rem;
+      font-weight: bold;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      transition: all 0.3s ease;
+      display: inline-block;
+    }
+    .logo-text.animado {
+      transform: scale(1.1);
+      text-shadow: 0 0 10px rgba(102,126,234,0.5);
+    }
+    .nav-menu {
+      display: flex;
+      list-style: none;
+      gap: 2rem;
+      margin: 0;
+      padding: 0;
+    }
+    .nav-menu a {
+      color: #333;
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      display: inline-block;
+    }
+    .nav-menu a:hover {
+      background: rgba(255,255,255,0.8);
+      transform: translateY(-3px) scale(1.05);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+    .nav-menu a.active {
+      background: white;
+      color: #764ba2;
+      font-weight: bold;
+    }
+    .logout-btn {
+      background: rgba(255,255,255,0.9);
+      border: none;
+      color: #764ba2;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-weight: bold;
+    }
+    .logout-btn:hover {
+      background: white;
+      transform: scale(1.1) rotate(2deg);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+    @media (max-width: 768px) {
+      .nav-container { flex-direction: column; gap: 1rem; }
+      .nav-menu { flex-wrap: wrap; justify-content: center; }
+    }
+  

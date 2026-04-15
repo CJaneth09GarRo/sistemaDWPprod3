@@ -1,0 +1,105 @@
+
+    .dashboard {
+      padding: 40px;
+      background: linear-gradient(135deg, #f8f9fa 0%, #f0f2f5 100%);
+      min-height: 100vh;
+    }
+    .welcome-card {
+      background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+      color: white;
+      padding: 30px;
+      border-radius: 25px;
+      margin-bottom: 30px;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+    .welcome-avatar {
+      font-size: 3rem;
+      margin-bottom: 10px;
+    }
+    .user-info {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 15px;
+      flex-wrap: wrap;
+    }
+    .badge-rol {
+      background: rgba(255,255,255,0.3);
+      padding: 5px 15px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+    }
+    .stats-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 40px;
+    }
+    .stat-card {
+      background: white;
+      padding: 25px;
+      border-radius: 20px;
+      text-align: center;
+      transition: all 0.3s ease;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+    }
+    .stat-card:hover {
+      transform: translateY(-5px) scale(1.02);
+      box-shadow: 0 15px 30px rgba(0,0,0,0.12);
+    }
+    .stat-icon {
+      font-size: 2rem;
+      margin-bottom: 10px;
+    }
+    .stat-number {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #ff6b9d;
+    }
+    .stat-label {
+      color: #666;
+      margin-top: 5px;
+    }
+    .materias-section h3 {
+      margin-bottom: 20px;
+      color: #333;
+    }
+    .materias-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+    }
+    .materia-card {
+      background: white;
+      padding: 20px;
+      border-radius: 20px;
+      transition: all 0.3s ease;
+      cursor: pointer;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+    }
+    .materia-card:hover {
+      transform: translateY(-5px) scale(1.02);
+      box-shadow: 0 15px 30px rgba(0,0,0,0.12);
+    }
+    .materia-icon {
+      font-size: 2rem;
+      margin-bottom: 10px;
+    }
+    .progreso {
+      margin-top: 15px;
+      height: 8px;
+      background: #f0f0f0;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .barra {
+      height: 100%;
+      background: linear-gradient(135deg, #ff6b9d 0%, #ff9a9e 100%);
+      border-radius: 10px;
+      transition: width 0.5s ease;
+    }
+    @media (max-width: 768px) {
+      .dashboard { padding: 20px; }
+      .stats-container { grid-template-columns: 1fr; }
+    }

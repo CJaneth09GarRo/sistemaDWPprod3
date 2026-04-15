@@ -1,0 +1,100 @@
+
+    .portada {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #fdf4f9 0%, #ffe9f0 100%);
+    }
+    .hero {
+      text-align: center;
+      padding: 80px 20px;
+      background: linear-gradient(135deg, #ff6b9d 0%, #ff9a9e 100%);
+      color: white;
+      clip-path: polygon(0 0, 100% 0, 100% 90%, 0 100%);
+    }
+    .school-icon {
+      font-size: 5rem;
+      margin-bottom: 20px;
+      display: inline-block;
+      transition: all 0.3s ease;
+    }
+    .school-icon.animado {
+      transform: scale(1.2) rotate(10deg);
+    }
+    .hero h1 {
+      font-size: 2.5rem;
+      margin-bottom: 15px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    }
+    .hero h2 {
+      font-size: 1.5rem;
+      margin-bottom: 20px;
+      font-weight: 300;
+    }
+    .description {
+      max-width: 600px;
+      margin: 20px auto;
+      font-size: 1.1rem;
+      line-height: 1.6;
+    }
+    .buttons {
+      margin-top: 30px;
+    }
+    .btn-primary, .btn-secondary {
+      display: inline-block;
+      padding: 12px 30px;
+      margin: 0 10px;
+      border-radius: 30px;
+      text-decoration: none;
+      transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      font-weight: bold;
+    }
+    .btn-primary {
+      background: white;
+      color: #ff6b9d;
+    }
+    .btn-secondary {
+      background: transparent;
+      color: white;
+      border: 2px solid white;
+    }
+    .btn-primary:hover, .btn-secondary:hover {
+      transform: translateY(-5px) scale(1.05);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+    .features {
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      padding: 60px 20px;
+      flex-wrap: wrap;
+    }
+    .feature-card {
+      background: white;
+      padding: 30px;
+      border-radius: 20px;
+      text-align: center;
+      width: 260px;
+      transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+      cursor: pointer;
+    }
+    .feature-card:hover {
+      transform: translateY(-10px) scale(1.05);
+      box-shadow: 0 20px 35px rgba(0,0,0,0.15);
+    }
+    .icon {
+      font-size: 3rem;
+      margin-bottom: 15px;
+    }
+    .footer {
+      text-align: center;
+      padding: 30px;
+      background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+      color: white;
+    }
+    @media (max-width: 768px) {
+      .hero h1 { font-size: 1.8rem; }
+      .hero h2 { font-size: 1.2rem; }
+      .features { flex-direction: column; align-items: center; }
+      .buttons a { display: block; margin: 10px auto; width: 200px; }
+    }
+  
