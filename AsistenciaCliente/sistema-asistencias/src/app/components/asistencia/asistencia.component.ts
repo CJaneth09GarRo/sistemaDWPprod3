@@ -19,14 +19,14 @@ import { AlumnoMateria, Asistencia, Materia } from '../../models/models';
 
       <div class="filtros">
         <select [(ngModel)]="materiaSeleccionada" (change)="onMateriaChange()" name="materia">
-          <option value="">-- Selecciona una materia --</option>
+          <option [ngValue]="null">-- Selecciona una materia --</option>
           <option *ngFor="let m of materias" [ngValue]="m.id">{{m.nombre_materia}}</option>
         </select>
         <input type="number" [(ngModel)]="anioActual" min="2000" max="2100" (change)="cargarAsistencias()" />
         <input type="number" [(ngModel)]="mesActual" min="1" max="12" (change)="cargarAsistencias()" />
       </div>
 
-      <div class="asistencia-form" *ngIf="canManageAttendance && materiaSeleccionada !== null">
+      <div class="asistencia-form" *ngIf="canManageAttendance && materiaSeleccionada != null">
         <h3>➕ Registrar asistencia</h3>
         <div class="form-group">
           <select [(ngModel)]="usuarioSeleccionado" name="usuario">
@@ -110,7 +110,7 @@ export class AsistenciaComponent implements OnInit {
   }
 
   onMateriaChange() {
-    if (this.materiaSeleccionada === null) {
+    if (this.materiaSeleccionada == null) {
       this.asistencias = [];
       this.alumnos = [];
       return;
@@ -123,7 +123,7 @@ export class AsistenciaComponent implements OnInit {
   }
 
   cargarAlumnos() {
-    if (this.materiaSeleccionada === null) return;
+    if (this.materiaSeleccionada == null) return;
 
     this.asistenciaService.getAlumnosPorMateria(this.materiaSeleccionada).subscribe({
       next: data => this.alumnos = data,
@@ -132,7 +132,7 @@ export class AsistenciaComponent implements OnInit {
   }
 
   cargarAsistencias() {
-    if (this.materiaSeleccionada === null) return;
+    if (this.materiaSeleccionada == null) return;
 
     this.asistenciaService.getAsistencias(this.materiaSeleccionada, this.anioActual, this.mesActual).subscribe({
       next: data => this.asistencias = data,
@@ -141,7 +141,7 @@ export class AsistenciaComponent implements OnInit {
   }
 
   guardarAsistencia() {
-    if (!this.canManageAttendance || this.materiaSeleccionada === null || this.usuarioSeleccionado === null) {
+    if (!this.canManageAttendance || this.materiaSeleccionada == null || this.usuarioSeleccionado == null) {
       this.error = '❌ Debes seleccionar materia y alumno para registrar asistencia.';
       return;
     }
