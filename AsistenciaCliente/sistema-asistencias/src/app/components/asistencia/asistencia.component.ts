@@ -18,7 +18,7 @@ import { AsistenciaService } from '../../services/asistencia.service';
       <div class="filtros">
         <select [(ngModel)]="materiaSeleccionada" (change)="cargarAsistencias()" name="materia">
           <option value="">-- Selecciona una materia --</option>
-          <option *ngFor="let m of materias" [value]="m.id">{{m.nombre_materia}}</option>
+          <option *ngFor="let m of materias" [ngValue]="m.id">{{m.nombre_materia}}</option>
         </select>
       </div>
 
@@ -56,13 +56,15 @@ import { AsistenciaService } from '../../services/asistencia.service';
 export class AsistenciaComponent implements OnInit {  // ✅ clase correcta
   materias: any[] = [];
   asistencias: any[] = [];
-  materiaSeleccionada = '';
+  materiaSeleccionada: number | null = null;
+  anioActual = new Date().getFullYear();
+  mesActual = new Date().getMonth() + 1;
   error = '';
 
   constructor(
     private authService: AuthService,
     private asistenciaService: AsistenciaService
-  ) {}
+  ) { }
 
   ngOnInit() {
     this.asistenciaService.getMaterias().subscribe({
@@ -72,8 +74,8 @@ export class AsistenciaComponent implements OnInit {  // ✅ clase correcta
   }
 
   cargarAsistencias() {
-    if (!this.materiaSeleccionada) return;
-    this.asistenciaService.getAsistencias(this.materiaSeleccionada).subscribe({
+    if (this.materiaSeleccionada === null) return;
+    this.asistenciaService.getAsistencias(this.materiaSeleccionada, this.anioActual, this.mesActual).subscribe({
       next: data => this.asistencias = data,
       error: () => this.error = '❌ Error al cargar asistencias'
     });

@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../services/auth.service';
 import { AsistenciaService } from '../../services/asistencia.service';
-import { Materia } from '../../models/models';
+import { Materia, Usuario } from '../../models/models';
 
 @Component({
   selector: 'app-dashboard',
@@ -49,8 +49,8 @@ import { Materia } from '../../models/models';
   `,
 })
 export class DashboardComponent implements OnInit {
-  usuario = this.authService.getUser();
-  materias: Materia[] = [];   
+  usuario: Usuario | null = null;
+  materias: Materia[] = [];
   cargando = false;
   error = '';
 
@@ -64,9 +64,10 @@ export class DashboardComponent implements OnInit {
   constructor(
     private authService: AuthService,
     private asistenciaService: AsistenciaService
-  ) {}
+  ) { }
 
   ngOnInit() {
+    this.usuario = this.authService.getUser();
     this.cargarMaterias();
   }
 
