@@ -121,7 +121,7 @@ app.MapPost("/api/auth/login", async (LoginDto login, DapperContext db) =>
 });
 
 // ============ REGISTRO ============
-app.MapPost("/api/auth/registro", async (RegistroDto dto, DapperContext db, ILogger<Program> logger) =>
+app.MapPost("/api/auth/registro", async (RegistroDto dto, DapperContext db) =>
 {
     try
     {
@@ -134,11 +134,6 @@ app.MapPost("/api/auth/registro", async (RegistroDto dto, DapperContext db, ILog
         if (dto.Contrasena.Length < 6)
         {
             return Results.BadRequest(new { mensaje = "La contraseña debe tener al menos 6 caracteres" });
-        }
-
-        if (dto.Edad <= 0)
-        {
-            return Results.BadRequest(new { mensaje = "La edad debe ser mayor que cero" });
         }
 
         var existe = await db.ExecuteScalarAsync<long>(
@@ -167,24 +162,17 @@ app.MapPost("/api/auth/registro", async (RegistroDto dto, DapperContext db, ILog
 
         return Results.Ok(new { mensaje = "Usuario registrado exitosamente" });
     }
-    catch (PostgresException ex) when (ex.SqlState == "23505")
-    {
-        logger.LogWarning(ex, "Intento de registro con correo duplicado: {Correo}", dto.Correo);
-        return Results.BadRequest(new { mensaje = "El correo ya está registrado" });
-    }
     catch (NpgsqlException)
     {
-        logger.LogError("Error de base de datos al registrar usuario con correo {Correo}", dto.Correo);
         return Results.Problem(
             detail: "No se pudo conectar con la base de datos.",
             statusCode: StatusCodes.Status503ServiceUnavailable,
             title: "Servicio de base de datos no disponible");
     }
-    catch (Exception ex)
+    catch (Exception)
     {
-        logger.LogError(ex, "Error inesperado durante el registro del usuario con correo {Correo}", dto.Correo);
         return Results.Problem(
-            detail: $"Ocurrió un error inesperado durante el registro: {ex.Message}",
+            detail: "Ocurrió un error inesperado durante el registro.",
             statusCode: StatusCodes.Status500InternalServerError,
             title: "Error interno");
     }
@@ -230,63 +218,18 @@ app.MapGet("/api/asistencias/{materiaId}/{anio}/{mes}", async (int materiaId, in
 // Registrar o actualizar asistencia
 app.MapPost("/api/asistencias", async (AsistenciaRegistroDto dto, DapperContext db) =>
 {
-    try
-    {
-        var fecha = dto.Fecha.Date;
+    var sql = @"
+        INSERT INTO asistencia (usuario_id, materia_id, fecha, horas_impartidas, horas_asistidas, observacion, presente)
+        VALUES (@UsuarioId, @MateriaId, @Fecha, @HorasImpartidas, @HorasAsistidas, @Observacion, @Presente)
+        ON CONFLICT (usuario_id, materia_id, fecha)
+        DO UPDATE SET 
+            horas_impartidas = EXCLUDED.horas_impartidas,
+            horas_asistidas = EXCLUDED.horas_asistidas,
+            observacion = EXCLUDED.observacion,
+            presente = EXCLUDED.presente";
 
-        var filasActualizadas = await db.ExecuteAsync(@"
-            UPDATE asistencia
-            SET horas_impartidas = @HorasImpartidas,
-                horas_asistidas = @HorasAsistidas,
-                observacion = @Observacion,
-                presente = @Presente
-            WHERE usuario_id = @UsuarioId
-              AND materia_id = @MateriaId
-              AND fecha = @Fecha",
-            new
-            {
-                dto.UsuarioId,
-                dto.MateriaId,
-                Fecha = fecha,
-                dto.HorasImpartidas,
-                dto.HorasAsistidas,
-                dto.Observacion,
-                dto.Presente
-            });
-
-        if (filasActualizadas == 0)
-        {
-            await db.ExecuteAsync(@"
-                INSERT INTO asistencia (usuario_id, materia_id, fecha, horas_impartidas, horas_asistidas, observacion, presente)
-                VALUES (@UsuarioId, @MateriaId, @Fecha, @HorasImpartidas, @HorasAsistidas, @Observacion, @Presente)",
-                new
-                {
-                    dto.UsuarioId,
-                    dto.MateriaId,
-                    Fecha = fecha,
-                    dto.HorasImpartidas,
-                    dto.HorasAsistidas,
-                    dto.Observacion,
-                    dto.Presente
-                });
-        }
-
-        return Results.Ok(new { mensaje = "Asistencia registrada o actualizada" });
-    }
-    catch (NpgsqlException ex)
-    {
-        return Results.Problem(
-            detail: $"No se pudo guardar la asistencia: {ex.Message}",
-            statusCode: StatusCodes.Status503ServiceUnavailable,
-            title: "Error de base de datos");
-    }
-    catch (Exception ex)
-    {
-        return Results.Problem(
-            detail: $"Error inesperado al guardar la asistencia: {ex.Message}",
-            statusCode: StatusCodes.Status500InternalServerError,
-            title: "Error interno");
-    }
+    await db.ExecuteAsync(sql, dto);
+    return Results.Ok(new { mensaje = "Asistencia registrada o actualizada" });
 }).RequireAuthorization("CanManageAttendance");
 
 // Eliminar asistencia
