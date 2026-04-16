@@ -57,9 +57,15 @@ export class LoginComponent {
     this.error = '';
     this.authService.login(this.correo, this.contrasena).subscribe({
       next: () => this.router.navigate(['/dashboard']),
-      error: () => {
-        this.error = '❌ Credenciales incorrectas';
-        this.cargando = false;     // ✅ rehabilita el botón si falla
+      error: (err) => {
+        if (err.status === 503) {
+          this.error = '❌ El servicio no está disponible. Intenta más tarde.';
+        } else if (err.status === 0) {
+          this.error = '❌ No se puede conectar con el servidor.';
+        } else {
+          this.error = '❌ Credenciales incorrectas';
+        }
+        this.cargando = false;
       }
     });
   }

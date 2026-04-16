@@ -67,81 +67,115 @@ await PrepareDatabaseAsync(app.Services, app.Logger);
 // ============ LOGIN ============
 app.MapPost("/api/auth/login", async (LoginDto login, DapperContext db) =>
 {
-    var correo = NormalizeEmail(login.Correo);
-    if (string.IsNullOrWhiteSpace(correo) || string.IsNullOrWhiteSpace(login.Contrasena))
+    try
     {
-        return Results.BadRequest(new { mensaje = "Correo y contraseña son obligatorios" });
-    }
-
-    var sql = @"SELECT id, correo, nombre, edad, rol, contrasenahash
-                FROM usuario
-                WHERE lower(correo) = @Correo";
-    var usuario = await db.QueryFirstOrDefaultAsync<Usuario>(sql, new { Correo = correo });
-
-    if (usuario is null)
-    {
-        return Results.Unauthorized();
-    }
-
-    // Verificar contraseña (texto plano)
-    if (usuario.Contrasenahash != login.Contrasena)
-    {
-        return Results.Unauthorized();
-    }
-
-    var token = GenerarToken(usuario);
-    return Results.Ok(new
-    {
-        token,
-        usuario = new
+        var correo = NormalizeEmail(login.Correo);
+        if (string.IsNullOrWhiteSpace(correo) || string.IsNullOrWhiteSpace(login.Contrasena))
         {
-            usuario.Id,
-            usuario.Nombre,
-            usuario.Correo,
-            usuario.Rol
+            return Results.BadRequest(new { mensaje = "Correo y contraseña son obligatorios" });
         }
-    });
+
+        var sql = @"SELECT id, correo, nombre, edad, rol, contrasenahash
+                    FROM usuario
+                    WHERE lower(correo) = @Correo";
+        var usuario = await db.QueryFirstOrDefaultAsync<Usuario>(sql, new { Correo = correo });
+
+        if (usuario is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        // Verificar contraseña (texto plano)
+        if (usuario.Contrasenahash != login.Contrasena)
+        {
+            return Results.Unauthorized();
+        }
+
+        var token = GenerarToken(usuario);
+        return Results.Ok(new
+        {
+            token,
+            usuario = new
+            {
+                usuario.Id,
+                usuario.Nombre,
+                usuario.Correo,
+                usuario.Rol
+            }
+        });
+    }
+    catch (NpgsqlException)
+    {
+        return Results.Problem(
+            detail: "No se pudo conectar con la base de datos.",
+            statusCode: StatusCodes.Status503ServiceUnavailable,
+            title: "Servicio de base de datos no disponible");
+    }
+    catch (Exception)
+    {
+        return Results.Problem(
+            detail: "Ocurrió un error inesperado durante el inicio de sesión.",
+            statusCode: StatusCodes.Status500InternalServerError,
+            title: "Error interno");
+    }
 });
 
 // ============ REGISTRO ============
 app.MapPost("/api/auth/registro", async (RegistroDto dto, DapperContext db) =>
 {
-    var correo = NormalizeEmail(dto.Correo);
-    if (string.IsNullOrWhiteSpace(correo) || string.IsNullOrWhiteSpace(dto.Nombre) || string.IsNullOrWhiteSpace(dto.Contrasena))
+    try
     {
-        return Results.BadRequest(new { mensaje = "Correo, nombre y contraseña son obligatorios" });
+        var correo = NormalizeEmail(dto.Correo);
+        if (string.IsNullOrWhiteSpace(correo) || string.IsNullOrWhiteSpace(dto.Nombre) || string.IsNullOrWhiteSpace(dto.Contrasena))
+        {
+            return Results.BadRequest(new { mensaje = "Correo, nombre y contraseña son obligatorios" });
+        }
+
+        if (dto.Contrasena.Length < 6)
+        {
+            return Results.BadRequest(new { mensaje = "La contraseña debe tener al menos 6 caracteres" });
+        }
+
+        var existe = await db.ExecuteScalarAsync<long>(
+            "SELECT COUNT(1) FROM usuario WHERE lower(correo) = @Correo",
+            new { Correo = correo });
+
+        if (existe > 0)
+        {
+            return Results.BadRequest(new { mensaje = "El correo ya está registrado" });
+        }
+
+        var rolRegistro = NormalizePublicRole(dto.Rol);
+
+        // Guardar contraseña directamente (texto plano)
+        var sql = @"INSERT INTO usuario (correo, nombre, edad, rol, contrasenahash)
+                    VALUES (@Correo, @Nombre, @Edad, @Rol, @Contrasena)";
+
+        await db.ExecuteAsync(sql, new
+        {
+            Correo = correo,
+            Nombre = dto.Nombre.Trim(),
+            Edad = dto.Edad,
+            Rol = rolRegistro,
+            Contrasena = dto.Contrasena
+        });
+
+        return Results.Ok(new { mensaje = "Usuario registrado exitosamente" });
     }
-
-    if (dto.Contrasena.Length < 6)
+    catch (NpgsqlException)
     {
-        return Results.BadRequest(new { mensaje = "La contraseña debe tener al menos 6 caracteres" });
+        return Results.Problem(
+            detail: "No se pudo conectar con la base de datos.",
+            statusCode: StatusCodes.Status503ServiceUnavailable,
+            title: "Servicio de base de datos no disponible");
     }
-
-    var existe = await db.ExecuteScalarAsync<long>(
-        "SELECT COUNT(1) FROM usuario WHERE lower(correo) = @Correo",
-        new { Correo = correo });
-
-    if (existe > 0)
+    catch (Exception)
     {
-        return Results.BadRequest(new { mensaje = "El correo ya está registrado" });
+        return Results.Problem(
+            detail: "Ocurrió un error inesperado durante el registro.",
+            statusCode: StatusCodes.Status500InternalServerError,
+            title: "Error interno");
     }
-
-    var rolRegistro = NormalizePublicRole(dto.Rol);
-
-    // Guardar contraseña directamente (texto plano)
-    var sql = @"INSERT INTO usuario (correo, nombre, edad, rol, contrasenahash) 
-                VALUES (@Correo, @Nombre, @Edad, @Rol, @Contrasena)";
-
-    await db.ExecuteAsync(sql, new
-    {
-        Correo = correo,
-        Nombre = dto.Nombre.Trim(),
-        Edad = dto.Edad,
-        Rol = rolRegistro,
-        Contrasena = dto.Contrasena
-    });
-
-    return Results.Ok(new { mensaje = "Usuario registrado exitosamente" });
 });
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok", utc = DateTime.UtcNow }));

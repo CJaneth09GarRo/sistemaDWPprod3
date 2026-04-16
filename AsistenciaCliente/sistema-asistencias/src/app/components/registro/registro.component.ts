@@ -89,8 +89,16 @@ export class RegistroComponent {
         this.mensaje = '✅ Registro exitoso. Redirigiendo al login...';
         setTimeout(() => this.router.navigate(['/login']), 2000);
       },
-      error: () => {
-        this.error = '❌ Error al registrar usuario';
+      error: (err) => {
+        if (err.status === 503) {
+          this.error = '❌ El servicio no está disponible. Intenta más tarde.';
+        } else if (err.status === 0) {
+          this.error = '❌ No se puede conectar con el servidor.';
+        } else if (err.status === 400 && err.error?.mensaje) {
+          this.error = `❌ ${err.error.mensaje}`;
+        } else {
+          this.error = '❌ Error al registrar usuario';
+        }
         this.cargando = false;
       }
     });
