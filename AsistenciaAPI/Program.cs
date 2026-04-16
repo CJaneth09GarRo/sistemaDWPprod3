@@ -75,9 +75,10 @@ app.MapPost("/api/auth/login", async (LoginDto login, DapperContext db) =>
             return Results.BadRequest(new { mensaje = "Correo y contraseña son obligatorios" });
         }
 
-        var sql = @"SELECT id, correo, nombre, edad, rol, contrasenahash
-                    FROM usuario
-                    WHERE lower(correo) = @Correo";
+        var sql = @"SELECT u.id, u.correo, u.nombre, u.edad, r.nombre_rol AS rol, u.contrasenahash
+                    FROM usuario u
+                    JOIN rol r ON u.rol_id = r.id
+                    WHERE lower(u.correo) = @Correo";
         var usuario = await db.QueryFirstOrDefaultAsync<Usuario>(sql, new { Correo = correo });
 
         if (usuario is null)
@@ -145,18 +146,27 @@ app.MapPost("/api/auth/registro", async (RegistroDto dto, DapperContext db) =>
             return Results.BadRequest(new { mensaje = "El correo ya está registrado" });
         }
 
-        var rolRegistro = NormalizePublicRole(dto.Rol);
+        var rolNombre = NormalizePublicRole(dto.Rol);
+
+        var rolId = await db.ExecuteScalarAsync<int?>(
+            "SELECT id FROM rol WHERE lower(nombre_rol) = lower(@Nombre)",
+            new { Nombre = rolNombre });
+
+        if (rolId is null)
+        {
+            return Results.BadRequest(new { mensaje = "Rol no válido" });
+        }
 
         // Guardar contraseña directamente (texto plano)
-        var sql = @"INSERT INTO usuario (correo, nombre, edad, rol, contrasenahash)
-                    VALUES (@Correo, @Nombre, @Edad, @Rol, @Contrasena)";
+        var sql = @"INSERT INTO usuario (correo, nombre, edad, rol_id, contrasenahash)
+                    VALUES (@Correo, @Nombre, @Edad, @RolId, @Contrasena)";
 
         await db.ExecuteAsync(sql, new
         {
             Correo = correo,
             Nombre = dto.Nombre.Trim(),
             Edad = dto.Edad,
-            Rol = rolRegistro,
+            RolId = rolId,
             Contrasena = dto.Contrasena
         });
 
@@ -249,10 +259,11 @@ app.MapDelete("/api/asistencias/{id}", async (int id, DapperContext db) =>
 app.MapGet("/api/alumnos-materia/{materiaId}", async (int materiaId, DapperContext db) =>
 {
     var sql = @"
-        SELECT DISTINCT u.id, u.nombre, u.correo, u.rol
+        SELECT DISTINCT u.id, u.nombre, u.correo, r.nombre_rol AS rol
         FROM usuario u
+        JOIN rol r ON u.rol_id = r.id
         INNER JOIN asistencia a ON u.id = a.usuario_id
-        WHERE u.rol = 'Alumno' AND a.materia_id = @MateriaId
+        WHERE r.nombre_rol = 'Alumno' AND a.materia_id = @MateriaId
         ORDER BY u.nombre";
     
     var result = await db.QueryAsync<Usuario>(sql, new { MateriaId = materiaId });
@@ -362,8 +373,8 @@ public class AsistenciaDto
     public int MateriaId { get; set; }
     public DateTime Fecha { get; set; }
     public bool Presente { get; set; }
-    public int HorasImpartidas { get; set; }
-    public int HorasAsistidas { get; set; }
+    public decimal HorasImpartidas { get; set; }
+    public decimal HorasAsistidas { get; set; }
     public string Observacion { get; set; } = "";
     public string UsuarioNombre { get; set; } = "";
 }
@@ -374,8 +385,8 @@ public class AsistenciaRegistroDto
     public int MateriaId { get; set; }
     public DateTime Fecha { get; set; }
     public bool Presente { get; set; }
-    public int HorasImpartidas { get; set; }
-    public int HorasAsistidas { get; set; }
+    public decimal HorasImpartidas { get; set; }
+    public decimal HorasAsistidas { get; set; }
     public string Observacion { get; set; } = "";
 }
 
