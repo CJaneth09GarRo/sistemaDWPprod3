@@ -6,12 +6,12 @@ import { LoginResponse, Usuario } from '../models/models';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private apiUrl = 'http://localhost:5000/api/auth';
+  private apiUrl = 'http://localhost:5091/api/auth';
   private tokenKey = 'token';
   private userKey = 'user';
   private authStatus = new BehaviorSubject<boolean>(this.isLoggedIn());
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient) { }
 
   login(correo: string, contrasena: string): Observable<LoginResponse> {
     return this.http.post<LoginResponse>(`${this.apiUrl}/login`, { correo, contrasena })
@@ -51,5 +51,10 @@ export class AuthService {
 
   getRol(): string {
     return this.getUser()?.rol || '';
+  }
+
+  canManageAttendance(): boolean {
+    const rol = this.getRol().trim().toLowerCase();
+    return rol === 'maestro' || rol === 'administrador' || rol === 'admin';
   }
 }

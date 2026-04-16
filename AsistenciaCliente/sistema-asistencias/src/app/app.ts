@@ -7,6 +7,7 @@ import { AuthService } from './services/auth.service';
   selector: 'app-root',
   standalone: true,
   imports: [RouterOutlet, RouterModule, CommonModule],
+  styleUrl: './app.css',
   template: `
     <!-- Menú de navegación solo visible para usuarios autenticados -->
     <nav class="navbar" *ngIf="authService.isLoggedIn()">
@@ -40,12 +41,12 @@ import { AuthService } from './services/auth.service';
     </nav>
     <router-outlet></router-outlet>
   `,
- 
+
 })
 export class App {
   logoAnimado = false;
 
-  constructor(public authService: AuthService) {}
+  constructor(public authService: AuthService) { }
 
   animarLogo() {
     this.logoAnimado = true;

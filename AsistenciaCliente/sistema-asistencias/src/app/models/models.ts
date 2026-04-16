@@ -24,6 +24,13 @@ export interface Asistencia {
   usuarioNombre: string;
 }
 
+export interface AlumnoMateria {
+  id: number;
+  nombre: string;
+  correo: string;
+  rol: string;
+}
+
 export interface LoginResponse {
   token: string;
   usuario: Usuario;

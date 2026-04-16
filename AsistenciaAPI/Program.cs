@@ -36,7 +36,24 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("CanManageAttendance", policy =>
+    {
+        policy.RequireAssertion(context =>
+        {
+            var role = context.User.FindFirst(ClaimTypes.Role)?.Value;
+            if (string.IsNullOrWhiteSpace(role))
+            {
+                return false;
+            }
+
+            return role.Equals("Maestro", StringComparison.OrdinalIgnoreCase)
+                || role.Equals("Administrador", StringComparison.OrdinalIgnoreCase)
+                || role.Equals("Admin", StringComparison.OrdinalIgnoreCase);
+        });
+    });
+});
 builder.Services.AddSingleton<DapperContext>();
 
 var app = builder.Build();
@@ -45,71 +62,140 @@ app.UseCors("AllowAngular");
 app.UseAuthentication();
 app.UseAuthorization();
 
+await PrepareDatabaseAsync(app.Services, app.Logger);
+
 // ============ LOGIN ============
 app.MapPost("/api/auth/login", async (LoginDto login, DapperContext db) =>
 {
-    var sql = "SELECT * FROM usuario WHERE correo = @Correo";
-    var usuario = await db.QueryFirstOrDefaultAsync<Usuario>(sql, new { Correo = login.Correo });
-
-    if (usuario is null)
+    try
     {
-        return Results.Unauthorized();
-    }
-
-    // Verificar contraseña (texto plano)
-    if (usuario.Contrasenahash != login.Contrasena)
-    {
-        return Results.Unauthorized();
-    }
-
-    var token = GenerarToken(usuario);
-    return Results.Ok(new
-    {
-        token,
-        usuario = new
+        var correo = NormalizeEmail(login.Correo);
+        if (string.IsNullOrWhiteSpace(correo) || string.IsNullOrWhiteSpace(login.Contrasena))
         {
-            usuario.Id,
-            usuario.Nombre,
-            usuario.Correo,
-            usuario.Rol
+            return Results.BadRequest(new { mensaje = "Correo y contraseña son obligatorios" });
         }
-    });
+
+        var sql = @"SELECT u.id, u.correo, u.nombre, u.edad, r.nombre_rol AS rol, u.contrasenahash
+                    FROM usuario u
+                    JOIN rol r ON u.rol_id = r.id
+                    WHERE lower(u.correo) = @Correo";
+        var usuario = await db.QueryFirstOrDefaultAsync<Usuario>(sql, new { Correo = correo });
+
+        if (usuario is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        // Verificar contraseña (texto plano)
+        if (usuario.Contrasenahash != login.Contrasena)
+        {
+            return Results.Unauthorized();
+        }
+
+        var token = GenerarToken(usuario);
+        return Results.Ok(new
+        {
+            token,
+            usuario = new
+            {
+                usuario.Id,
+                usuario.Nombre,
+                usuario.Correo,
+                usuario.Rol
+            }
+        });
+    }
+    catch (NpgsqlException)
+    {
+        return Results.Problem(
+            detail: "No se pudo conectar con la base de datos.",
+            statusCode: StatusCodes.Status503ServiceUnavailable,
+            title: "Servicio de base de datos no disponible");
+    }
+    catch (Exception)
+    {
+        return Results.Problem(
+            detail: "Ocurrió un error inesperado durante el inicio de sesión.",
+            statusCode: StatusCodes.Status500InternalServerError,
+            title: "Error interno");
+    }
 });
 
 // ============ REGISTRO ============
 app.MapPost("/api/auth/registro", async (RegistroDto dto, DapperContext db) =>
 {
-    var existe = await db.ExecuteScalarAsync<long>(
-        "SELECT COUNT(1) FROM usuario WHERE correo = @Correo",
-        new { Correo = dto.Correo });
-
-    if (existe > 0)
+    try
     {
-        return Results.BadRequest(new { mensaje = "El correo ya está registrado" });
+        var correo = NormalizeEmail(dto.Correo);
+        if (string.IsNullOrWhiteSpace(correo) || string.IsNullOrWhiteSpace(dto.Nombre) || string.IsNullOrWhiteSpace(dto.Contrasena))
+        {
+            return Results.BadRequest(new { mensaje = "Correo, nombre y contraseña son obligatorios" });
+        }
+
+        if (dto.Contrasena.Length < 6)
+        {
+            return Results.BadRequest(new { mensaje = "La contraseña debe tener al menos 6 caracteres" });
+        }
+
+        var existe = await db.ExecuteScalarAsync<long>(
+            "SELECT COUNT(1) FROM usuario WHERE lower(correo) = @Correo",
+            new { Correo = correo });
+
+        if (existe > 0)
+        {
+            return Results.BadRequest(new { mensaje = "El correo ya está registrado" });
+        }
+
+        var rolNombre = NormalizePublicRole(dto.Rol);
+
+        var rolId = await db.ExecuteScalarAsync<int?>(
+            "SELECT id FROM rol WHERE lower(nombre_rol) = lower(@Nombre)",
+            new { Nombre = rolNombre });
+
+        if (rolId is null)
+        {
+            return Results.BadRequest(new { mensaje = "Rol no válido" });
+        }
+
+        // Guardar contraseña directamente (texto plano)
+        var sql = @"INSERT INTO usuario (correo, nombre, edad, rol_id, contrasenahash)
+                    VALUES (@Correo, @Nombre, @Edad, @RolId, @Contrasena)";
+
+        await db.ExecuteAsync(sql, new
+        {
+            Correo = correo,
+            Nombre = dto.Nombre.Trim(),
+            Edad = dto.Edad,
+            RolId = rolId,
+            Contrasena = dto.Contrasena
+        });
+
+        return Results.Ok(new { mensaje = "Usuario registrado exitosamente" });
     }
-
-    // Guardar contraseña directamente (texto plano)
-    var sql = @"INSERT INTO usuario (correo, nombre, edad, rol, contrasenahash) 
-                VALUES (@Correo, @Nombre, @Edad, @Rol, @Contrasena)";
-
-    await db.ExecuteAsync(sql, new
+    catch (NpgsqlException)
     {
-        Correo = dto.Correo,
-        Nombre = dto.Nombre,
-        Edad = dto.Edad,
-        Rol = string.IsNullOrEmpty(dto.Rol) ? "Alumno" : dto.Rol,
-        Contrasena = dto.Contrasena
-    });
-
-    return Results.Ok(new { mensaje = "Usuario registrado exitosamente" });
+        return Results.Problem(
+            detail: "No se pudo conectar con la base de datos.",
+            statusCode: StatusCodes.Status503ServiceUnavailable,
+            title: "Servicio de base de datos no disponible");
+    }
+    catch (Exception)
+    {
+        return Results.Problem(
+            detail: "Ocurrió un error inesperado durante el registro.",
+            statusCode: StatusCodes.Status500InternalServerError,
+            title: "Error interno");
+    }
 });
+
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", utc = DateTime.UtcNow }));
 
 // ============ MATERIAS ============
 app.MapGet("/api/materias", async (DapperContext db) =>
 {
     var materias = await db.QueryAsync<Materia>("SELECT * FROM materia ORDER BY nombre_materia");
     return Results.Ok(materias);
-});
+}).RequireAuthorization();
 
 // ============ ASISTENCIAS ============
 
@@ -137,7 +223,7 @@ app.MapGet("/api/asistencias/{materiaId}/{anio}/{mes}", async (int materiaId, in
     var result = await db.QueryAsync<AsistenciaDto>(sql, 
         new { MateriaId = materiaId, Anio = anio, Mes = mes });
     return Results.Ok(result);
-});
+}).RequireAuthorization();
 
 // Registrar o actualizar asistencia
 app.MapPost("/api/asistencias", async (AsistenciaRegistroDto dto, DapperContext db) =>
@@ -154,7 +240,7 @@ app.MapPost("/api/asistencias", async (AsistenciaRegistroDto dto, DapperContext 
 
     await db.ExecuteAsync(sql, dto);
     return Results.Ok(new { mensaje = "Asistencia registrada o actualizada" });
-});
+}).RequireAuthorization("CanManageAttendance");
 
 // Eliminar asistencia
 app.MapDelete("/api/asistencias/{id}", async (int id, DapperContext db) =>
@@ -167,25 +253,63 @@ app.MapDelete("/api/asistencias/{id}", async (int id, DapperContext db) =>
     }
     
     return Results.Ok(new { mensaje = "Asistencia eliminada" });
-});
+    }).RequireAuthorization("CanManageAttendance");
 
 // Obtener alumnos por materia
 app.MapGet("/api/alumnos-materia/{materiaId}", async (int materiaId, DapperContext db) =>
 {
     var sql = @"
-        SELECT DISTINCT u.id, u.nombre, u.correo, u.rol
+        SELECT DISTINCT u.id, u.nombre, u.correo, r.nombre_rol AS rol
         FROM usuario u
+        JOIN rol r ON u.rol_id = r.id
         INNER JOIN asistencia a ON u.id = a.usuario_id
-        WHERE u.rol = 'Alumno' AND a.materia_id = @MateriaId
+        WHERE r.nombre_rol = 'Alumno' AND a.materia_id = @MateriaId
         ORDER BY u.nombre";
     
     var result = await db.QueryAsync<Usuario>(sql, new { MateriaId = materiaId });
     return Results.Ok(result);
-});
+}).RequireAuthorization("CanManageAttendance");
 
 app.Run();
 
 // ============ FUNCIONES ============
+string NormalizeEmail(string? email)
+{
+    return (email ?? string.Empty).Trim().ToLowerInvariant();
+}
+
+string NormalizePublicRole(string? role)
+{
+    var normalized = (role ?? string.Empty).Trim();
+    if (normalized.Equals("Maestro", StringComparison.OrdinalIgnoreCase))
+    {
+        return "Maestro";
+    }
+
+    if (normalized.Equals("Secretario", StringComparison.OrdinalIgnoreCase))
+    {
+        return "Secretario";
+    }
+
+    // Bloquea escalamiento de privilegios por registro público.
+    return "Alumno";
+}
+
+async Task PrepareDatabaseAsync(IServiceProvider services, ILogger logger)
+{
+    try
+    {
+        var db = services.GetRequiredService<DapperContext>();
+        await db.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_usuario_correo_lower ON usuario ((lower(correo)))");
+        await db.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_asistencia_materia_fecha ON asistencia (materia_id, fecha)");
+        await db.ExecuteScalarAsync<int>("SELECT 1");
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "No se pudo preparar la base de datos al iniciar la API");
+    }
+}
+
 string GenerarToken(Usuario usuario)
 {
     var claims = new[]
@@ -249,8 +373,8 @@ public class AsistenciaDto
     public int MateriaId { get; set; }
     public DateTime Fecha { get; set; }
     public bool Presente { get; set; }
-    public int HorasImpartidas { get; set; }
-    public int HorasAsistidas { get; set; }
+    public decimal HorasImpartidas { get; set; }
+    public decimal HorasAsistidas { get; set; }
     public string Observacion { get; set; } = "";
     public string UsuarioNombre { get; set; } = "";
 }
@@ -261,8 +385,8 @@ public class AsistenciaRegistroDto
     public int MateriaId { get; set; }
     public DateTime Fecha { get; set; }
     public bool Presente { get; set; }
-    public int HorasImpartidas { get; set; }
-    public int HorasAsistidas { get; set; }
+    public decimal HorasImpartidas { get; set; }
+    public decimal HorasAsistidas { get; set; }
     public string Observacion { get; set; } = "";
 }
 

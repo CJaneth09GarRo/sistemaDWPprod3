@@ -9,6 +9,7 @@ import { Materia, Usuario } from '../../models/models';
   selector: 'app-dashboard',
   standalone: true,
   imports: [CommonModule, FormsModule],
+  styleUrl: './dashboard.component.css',
   template: `
     <div class="dashboard">
       <div class="welcome-card">

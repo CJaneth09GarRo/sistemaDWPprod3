@@ -6,6 +6,7 @@ import { CommonModule } from '@angular/common';
   selector: 'app-portada',
   standalone: true,
   imports: [RouterModule, CommonModule],
+  styleUrl: './portada.component.css',
   template: `
     <div class="portada">
       <!-- Hero Section -->

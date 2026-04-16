@@ -8,6 +8,7 @@ import { AuthService } from '../../services/auth.service';
   selector: 'app-login',
   standalone: true,
   imports: [FormsModule, CommonModule, RouterModule],
+  styleUrl: './login.component.css',
   template: `
     <div class="login-container">
       <div class="login-card" [class.animada]="cardAnimada"
@@ -48,7 +49,7 @@ export class LoginComponent {
   cargando = false;         // ✅ estado de carga
   cardAnimada = false;
 
-  constructor(private authService: AuthService, private router: Router) {}
+  constructor(private authService: AuthService, private router: Router) { }
 
   onSubmit() {
     if (this.cargando) return;
@@ -56,9 +57,15 @@ export class LoginComponent {
     this.error = '';
     this.authService.login(this.correo, this.contrasena).subscribe({
       next: () => this.router.navigate(['/dashboard']),
-      error: () => {
-        this.error = '❌ Credenciales incorrectas';
-        this.cargando = false;     // ✅ rehabilita el botón si falla
+      error: (err) => {
+        if (err.status === 503) {
+          this.error = '❌ El servicio no está disponible. Intenta más tarde.';
+        } else if (err.status === 0) {
+          this.error = '❌ No se puede conectar con el servidor.';
+        } else {
+          this.error = '❌ Credenciales incorrectas';
+        }
+        this.cargando = false;
       }
     });
   }
