@@ -43,13 +43,20 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAssertion(context =>
         {
             var role = context.User.FindFirst(ClaimTypes.Role)?.Value;
-            if (string.IsNullOrWhiteSpace(role))
-            {
-                return false;
-            }
-
+            if (string.IsNullOrWhiteSpace(role)) return false;
             return role.Equals("Maestro", StringComparison.OrdinalIgnoreCase)
                 || role.Equals("Administrador", StringComparison.OrdinalIgnoreCase)
+                || role.Equals("Admin", StringComparison.OrdinalIgnoreCase);
+        });
+    });
+
+    options.AddPolicy("AdminOnly", policy =>
+    {
+        policy.RequireAssertion(context =>
+        {
+            var role = context.User.FindFirst(ClaimTypes.Role)?.Value;
+            if (string.IsNullOrWhiteSpace(role)) return false;
+            return role.Equals("Administrador", StringComparison.OrdinalIgnoreCase)
                 || role.Equals("Admin", StringComparison.OrdinalIgnoreCase);
         });
     });
@@ -193,17 +200,191 @@ app.MapGet("/api/health", () => Results.Ok(new { status = "ok", utc = DateTime.U
 // ============ MATERIAS ============
 app.MapGet("/api/materias", async (DapperContext db) =>
 {
-    var materias = await db.QueryAsync<Materia>("SELECT * FROM materia ORDER BY nombre_materia");
+    var sql = @"
+        SELECT DISTINCT ON (m.id)
+            m.id, m.nombre_materia, m.horas_planificadas,
+            u.id   AS ProfesorId,
+            u.nombre AS ProfesorNombre
+        FROM materia m
+        LEFT JOIN maestro_materia mm ON mm.materia_id = m.id AND mm.activo = true
+        LEFT JOIN usuario u ON mm.maestro_id = u.id
+        ORDER BY m.id, mm.fecha_asignacion DESC";
+    var materias = await db.QueryAsync<MateriaDetalle>(sql);
     return Results.Ok(materias);
 }).RequireAuthorization();
 
+app.MapPost("/api/materias", async (CrearMateriaDto dto, DapperContext db) =>
+{
+    if (string.IsNullOrWhiteSpace(dto.NombreMateria))
+        return Results.BadRequest(new { mensaje = "El nombre de la materia es obligatorio" });
+
+    var materiaId = await db.ExecuteScalarAsync<int>(
+        @"INSERT INTO materia (nombre_materia, horas_planificadas)
+          VALUES (@Nombre, @Horas) RETURNING id",
+        new { Nombre = dto.NombreMateria.Trim(), Horas = dto.HorasPlanificadas });
+
+    if (dto.ProfesorId.HasValue)
+    {
+        await db.ExecuteAsync(
+            @"INSERT INTO maestro_materia (maestro_id, materia_id, fecha_asignacion, activo)
+              VALUES (@MaestroId, @MateriaId, CURRENT_DATE, true)",
+            new { MaestroId = dto.ProfesorId.Value, MateriaId = materiaId });
+    }
+
+    return Results.Ok(new { id = materiaId, mensaje = "Materia creada exitosamente" });
+}).RequireAuthorization("AdminOnly");
+
+app.MapPut("/api/materias/{id}", async (int id, EditarMateriaDto dto, DapperContext db) =>
+{
+    if (string.IsNullOrWhiteSpace(dto.NombreMateria))
+        return Results.BadRequest(new { mensaje = "El nombre de la materia es obligatorio" });
+
+    var filas = await db.ExecuteAsync(
+        "UPDATE materia SET nombre_materia = @Nombre, horas_planificadas = @Horas WHERE id = @Id",
+        new { Nombre = dto.NombreMateria.Trim(), Horas = dto.HorasPlanificadas, Id = id });
+
+    if (filas == 0) return Results.NotFound(new { mensaje = "Materia no encontrada" });
+
+    // Reasignar profesor: desactivar asignaciones previas e insertar la nueva
+    await db.ExecuteAsync("UPDATE maestro_materia SET activo = false WHERE materia_id = @Id", new { Id = id });
+    if (dto.ProfesorId.HasValue)
+    {
+        await db.ExecuteAsync(
+            @"INSERT INTO maestro_materia (maestro_id, materia_id, fecha_asignacion, activo)
+              VALUES (@MaestroId, @MateriaId, CURRENT_DATE, true)
+              ON CONFLICT (maestro_id, materia_id, grupo_id, periodo_academico_id) DO UPDATE SET activo = true",
+            new { MaestroId = dto.ProfesorId.Value, MateriaId = id });
+    }
+
+    return Results.Ok(new { mensaje = "Materia actualizada" });
+}).RequireAuthorization("AdminOnly");
+
+app.MapDelete("/api/materias/{id}", async (int id, DapperContext db) =>
+{
+    try
+    {
+        await db.ExecuteAsync("DELETE FROM asistencia WHERE materia_id = @Id", new { Id = id });
+        await db.ExecuteAsync("DELETE FROM maestro_materia WHERE materia_id = @Id", new { Id = id });
+        await db.ExecuteAsync("DELETE FROM alumno_materia WHERE materia_id = @Id", new { Id = id });
+        var filas = await db.ExecuteAsync("DELETE FROM materia WHERE id = @Id", new { Id = id });
+        if (filas == 0) return Results.NotFound(new { mensaje = "Materia no encontrada" });
+        return Results.Ok(new { mensaje = "Materia eliminada" });
+    }
+    catch (Exception)
+    {
+        return Results.Problem("No se pudo eliminar la materia.", statusCode: 500);
+    }
+}).RequireAuthorization("AdminOnly");
+
+// ============ PROFESORES ============
+app.MapGet("/api/profesores", async (DapperContext db) =>
+{
+    var sql = @"SELECT u.id, u.nombre, u.correo, u.edad, r.nombre_rol AS rol
+                FROM usuario u
+                JOIN rol r ON u.rol_id = r.id
+                WHERE r.nombre_rol = 'Maestro'
+                ORDER BY u.nombre";
+    var result = await db.QueryAsync<Usuario>(sql);
+    return Results.Ok(result);
+}).RequireAuthorization();
+
+app.MapPost("/api/profesores", async (CrearUsuarioDto dto, DapperContext db) =>
+{
+    var correo = (dto.Correo ?? "").Trim().ToLowerInvariant();
+    if (string.IsNullOrWhiteSpace(correo) || string.IsNullOrWhiteSpace(dto.Nombre) || string.IsNullOrWhiteSpace(dto.Contrasena))
+        return Results.BadRequest(new { mensaje = "Correo, nombre y contraseña son obligatorios" });
+
+    var existe = await db.ExecuteScalarAsync<long>(
+        "SELECT COUNT(1) FROM usuario WHERE lower(correo) = @Correo", new { Correo = correo });
+    if (existe > 0)
+        return Results.BadRequest(new { mensaje = "El correo ya está registrado" });
+
+    var rolId = await db.ExecuteScalarAsync<int?>(
+        "SELECT id FROM rol WHERE nombre_rol = 'Maestro'");
+    if (rolId is null) return Results.Problem("Rol Maestro no encontrado", statusCode: 500);
+
+    await db.ExecuteAsync(
+        "INSERT INTO usuario (correo, nombre, edad, rol_id, contrasenahash) VALUES (@Correo, @Nombre, @Edad, @RolId, @Contrasena)",
+        new { Correo = correo, Nombre = dto.Nombre.Trim(), Edad = dto.Edad, RolId = rolId, Contrasena = dto.Contrasena });
+
+    return Results.Ok(new { mensaje = "Profesor creado exitosamente" });
+}).RequireAuthorization("AdminOnly");
+
+// ============ ALUMNOS ============
+app.MapGet("/api/alumnos", async (DapperContext db) =>
+{
+    var sql = @"SELECT u.id, u.nombre, u.correo, u.edad, r.nombre_rol AS rol
+                FROM usuario u
+                JOIN rol r ON u.rol_id = r.id
+                WHERE r.nombre_rol = 'Alumno'
+                ORDER BY u.nombre";
+    var result = await db.QueryAsync<Usuario>(sql);
+    return Results.Ok(result);
+}).RequireAuthorization("AdminOnly");
+
+app.MapPost("/api/alumnos", async (CrearUsuarioDto dto, DapperContext db) =>
+{
+    var correo = (dto.Correo ?? "").Trim().ToLowerInvariant();
+    if (string.IsNullOrWhiteSpace(correo) || string.IsNullOrWhiteSpace(dto.Nombre) || string.IsNullOrWhiteSpace(dto.Contrasena))
+        return Results.BadRequest(new { mensaje = "Correo, nombre y contraseña son obligatorios" });
+
+    var existe = await db.ExecuteScalarAsync<long>(
+        "SELECT COUNT(1) FROM usuario WHERE lower(correo) = @Correo", new { Correo = correo });
+    if (existe > 0)
+        return Results.BadRequest(new { mensaje = "El correo ya está registrado" });
+
+    var rolId = await db.ExecuteScalarAsync<int?>(
+        "SELECT id FROM rol WHERE nombre_rol = 'Alumno'");
+    if (rolId is null) return Results.Problem("Rol Alumno no encontrado", statusCode: 500);
+
+    var nuevoId = await db.ExecuteScalarAsync<int>(
+        "INSERT INTO usuario (correo, nombre, edad, rol_id, contrasenahash) VALUES (@Correo, @Nombre, @Edad, @RolId, @Contrasena) RETURNING id",
+        new { Correo = correo, Nombre = dto.Nombre.Trim(), Edad = dto.Edad, RolId = rolId, Contrasena = dto.Contrasena });
+
+    return Results.Ok(new { id = nuevoId, mensaje = "Alumno creado exitosamente" });
+}).RequireAuthorization("AdminOnly");
+
+app.MapPut("/api/alumnos/{id}", async (int id, EditarUsuarioDto dto, DapperContext db) =>
+{
+    if (string.IsNullOrWhiteSpace(dto.Nombre))
+        return Results.BadRequest(new { mensaje = "El nombre es obligatorio" });
+
+    var filas = await db.ExecuteAsync(
+        "UPDATE usuario SET nombre = @Nombre, edad = @Edad WHERE id = @Id",
+        new { Nombre = dto.Nombre.Trim(), Edad = dto.Edad, Id = id });
+
+    if (filas == 0) return Results.NotFound(new { mensaje = "Alumno no encontrado" });
+    return Results.Ok(new { mensaje = "Alumno actualizado" });
+}).RequireAuthorization("AdminOnly");
+
+app.MapDelete("/api/alumnos/{id}", async (int id, DapperContext db) =>
+{
+    try
+    {
+        await db.ExecuteAsync("DELETE FROM asistencia WHERE usuario_id = @Id", new { Id = id });
+        await db.ExecuteAsync("DELETE FROM maestro_materia WHERE maestro_id = @Id", new { Id = id });
+        await db.ExecuteAsync("DELETE FROM alumno_materia WHERE alumno_id = @Id", new { Id = id });
+        var filas = await db.ExecuteAsync("DELETE FROM usuario WHERE id = @Id", new { Id = id });
+        if (filas == 0) return Results.NotFound(new { mensaje = "Alumno no encontrado" });
+        return Results.Ok(new { mensaje = "Alumno eliminado" });
+    }
+    catch (Exception)
+    {
+        return Results.Problem("No se pudo eliminar el alumno.", statusCode: 500);
+    }
+}).RequireAuthorization("AdminOnly");
+
 // ============ ASISTENCIAS ============
 
-// Obtener asistencias por materia y mes
-app.MapGet("/api/asistencias/{materiaId}/{anio}/{mes}", async (int materiaId, int anio, int mes, DapperContext db) =>
+// Obtener asistencias por materia y mes (Alumno solo ve las suyas)
+app.MapGet("/api/asistencias/{materiaId}/{anio}/{mes}", async (int materiaId, int anio, int mes, DapperContext db, HttpContext httpContext) =>
 {
+    var rol = httpContext.User.FindFirst(ClaimTypes.Role)?.Value ?? "";
+    var esAlumno = rol.Equals("Alumno", StringComparison.OrdinalIgnoreCase);
+    int.TryParse(httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var usuarioId);
+
     var sql = @"
-        SELECT 
+        SELECT
             a.id,
             a.usuario_id AS UsuarioId,
             a.materia_id AS MateriaId,
@@ -217,11 +398,12 @@ app.MapGet("/api/asistencias/{materiaId}/{anio}/{mes}", async (int materiaId, in
         JOIN usuario u ON a.usuario_id = u.id
         WHERE a.materia_id = @MateriaId
           AND EXTRACT(YEAR FROM a.fecha) = @Anio
-          AND EXTRACT(MONTH FROM a.fecha) = @Mes
-        ORDER BY u.nombre, a.fecha";
+          AND EXTRACT(MONTH FROM a.fecha) = @Mes"
+        + (esAlumno ? " AND a.usuario_id = @UsuarioId" : "") +
+        " ORDER BY u.nombre, a.fecha";
 
-    var result = await db.QueryAsync<AsistenciaDto>(sql, 
-        new { MateriaId = materiaId, Anio = anio, Mes = mes });
+    var result = await db.QueryAsync<AsistenciaDto>(sql,
+        new { MateriaId = materiaId, Anio = anio, Mes = mes, UsuarioId = usuarioId });
     return Results.Ok(result);
 }).RequireAuthorization();
 
@@ -255,20 +437,51 @@ app.MapDelete("/api/asistencias/{id}", async (int id, DapperContext db) =>
     return Results.Ok(new { mensaje = "Asistencia eliminada" });
     }).RequireAuthorization("CanManageAttendance");
 
-// Obtener alumnos por materia
+// Alumnos inscritos en la materia
 app.MapGet("/api/alumnos-materia/{materiaId}", async (int materiaId, DapperContext db) =>
 {
     var sql = @"
-        SELECT DISTINCT u.id, u.nombre, u.correo, r.nombre_rol AS rol
+        SELECT u.id, u.nombre, u.correo, r.nombre_rol AS rol
         FROM usuario u
+        JOIN alumno_materia am ON am.alumno_id = u.id
         JOIN rol r ON u.rol_id = r.id
-        INNER JOIN asistencia a ON u.id = a.usuario_id
-        WHERE r.nombre_rol = 'Alumno' AND a.materia_id = @MateriaId
+        WHERE am.materia_id = @MateriaId
         ORDER BY u.nombre";
-    
     var result = await db.QueryAsync<Usuario>(sql, new { MateriaId = materiaId });
     return Results.Ok(result);
 }).RequireAuthorization("CanManageAttendance");
+
+// Alumnos NO inscritos en la materia (para el selector de inscripción)
+app.MapGet("/api/alumnos-disponibles/{materiaId}", async (int materiaId, DapperContext db) =>
+{
+    var sql = @"
+        SELECT u.id, u.nombre, u.correo, r.nombre_rol AS rol
+        FROM usuario u
+        JOIN rol r ON u.rol_id = r.id
+        WHERE r.nombre_rol = 'Alumno'
+          AND u.id NOT IN (SELECT alumno_id FROM alumno_materia WHERE materia_id = @MateriaId)
+        ORDER BY u.nombre";
+    var result = await db.QueryAsync<Usuario>(sql, new { MateriaId = materiaId });
+    return Results.Ok(result);
+}).RequireAuthorization("AdminOnly");
+
+// Inscribir alumno a materia
+app.MapPost("/api/alumno-materia", async (InscribirAlumnoDto dto, DapperContext db) =>
+{
+    await db.ExecuteAsync(
+        "INSERT INTO alumno_materia (alumno_id, materia_id) VALUES (@AlumnoId, @MateriaId) ON CONFLICT DO NOTHING",
+        new { dto.AlumnoId, dto.MateriaId });
+    return Results.Ok(new { mensaje = "Alumno inscrito" });
+}).RequireAuthorization("AdminOnly");
+
+// Desinscribir alumno de materia
+app.MapDelete("/api/alumno-materia/{alumnoId}/{materiaId}", async (int alumnoId, int materiaId, DapperContext db) =>
+{
+    await db.ExecuteAsync(
+        "DELETE FROM alumno_materia WHERE alumno_id = @AlumnoId AND materia_id = @MateriaId",
+        new { AlumnoId = alumnoId, MateriaId = materiaId });
+    return Results.Ok(new { mensaje = "Inscripción eliminada" });
+}).RequireAuthorization("AdminOnly");
 
 app.Run();
 
@@ -300,8 +513,22 @@ async Task PrepareDatabaseAsync(IServiceProvider services, ILogger logger)
     try
     {
         var db = services.GetRequiredService<DapperContext>();
+        // Columnas agregadas después del esquema original — se aplican automáticamente en cualquier máquina
+        await db.ExecuteAsync("ALTER TABLE asistencia ADD COLUMN IF NOT EXISTS presente boolean NOT NULL DEFAULT false");
+        // Tabla de inscripciones alumno ↔ materia
+        await db.ExecuteAsync(@"
+            CREATE TABLE IF NOT EXISTS alumno_materia (
+                id SERIAL PRIMARY KEY,
+                alumno_id INTEGER NOT NULL REFERENCES usuario(id),
+                materia_id INTEGER NOT NULL REFERENCES materia(id),
+                UNIQUE(alumno_id, materia_id)
+            )");
+        // Índices para acelerar las consultas frecuentes
         await db.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_usuario_correo_lower ON usuario ((lower(correo)))");
         await db.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_asistencia_materia_fecha ON asistencia (materia_id, fecha)");
+        await db.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_alumno_materia_materia ON alumno_materia (materia_id)");
+        await db.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_maestro_materia_materia ON maestro_materia (materia_id)");
+        await db.ExecuteAsync("CREATE INDEX IF NOT EXISTS ix_usuario_rol ON usuario (rol_id)");
         await db.ExecuteScalarAsync<int>("SELECT 1");
     }
     catch (Exception ex)
@@ -390,40 +617,87 @@ public class AsistenciaRegistroDto
     public string Observacion { get; set; } = "";
 }
 
-// ============ DapperContext ============
-public class DapperContext
+public class MateriaDetalle
 {
-    private readonly string _connectionString;
+    public int Id { get; set; }
+    public string Nombre_materia { get; set; } = "";
+    public int Horas_planificadas { get; set; }
+    public int? ProfesorId { get; set; }
+    public string? ProfesorNombre { get; set; }
+}
+
+public class CrearMateriaDto
+{
+    public string NombreMateria { get; set; } = "";
+    public int HorasPlanificadas { get; set; }
+    public int? ProfesorId { get; set; }
+}
+
+public class CrearUsuarioDto
+{
+    public string Correo { get; set; } = "";
+    public string Nombre { get; set; } = "";
+    public int Edad { get; set; }
+    public string Contrasena { get; set; } = "";
+}
+
+public class InscribirAlumnoDto
+{
+    public int AlumnoId { get; set; }
+    public int MateriaId { get; set; }
+}
+
+public class EditarMateriaDto
+{
+    public string NombreMateria { get; set; } = "";
+    public int HorasPlanificadas { get; set; }
+    public int? ProfesorId { get; set; }
+}
+
+public class EditarUsuarioDto
+{
+    public string Nombre { get; set; } = "";
+    public int Edad { get; set; }
+}
+
+// ============ DapperContext ============
+public class DapperContext : IAsyncDisposable
+{
+    private readonly NpgsqlDataSource _dataSource;
 
     public DapperContext(IConfiguration config)
     {
-        _connectionString = config.GetConnectionString("PostgreSQL") ??
+        var cs = config.GetConnectionString("PostgreSQL") ??
             "Host=localhost;Database=prdct3;Username=postgres;Password=password";
+        _dataSource = NpgsqlDataSource.Create(cs);
     }
 
-    private NpgsqlConnection CreateConnection() => new NpgsqlConnection(_connectionString);
+    private async Task<NpgsqlConnection> GetConnectionAsync()
+        => await _dataSource.OpenConnectionAsync();
 
     public async Task<IEnumerable<T>> QueryAsync<T>(string sql, object? param = null)
     {
-        using var conn = CreateConnection();
+        await using var conn = await GetConnectionAsync();
         return await conn.QueryAsync<T>(sql, param);
     }
 
     public async Task<T?> QueryFirstOrDefaultAsync<T>(string sql, object? param = null)
     {
-        using var conn = CreateConnection();
+        await using var conn = await GetConnectionAsync();
         return await conn.QueryFirstOrDefaultAsync<T>(sql, param);
     }
 
     public async Task<int> ExecuteAsync(string sql, object? param = null)
     {
-        using var conn = CreateConnection();
+        await using var conn = await GetConnectionAsync();
         return await conn.ExecuteAsync(sql, param);
     }
 
     public async Task<T> ExecuteScalarAsync<T>(string sql, object? param = null)
     {
-        using var conn = CreateConnection();
+        await using var conn = await GetConnectionAsync();
         return await conn.ExecuteScalarAsync<T>(sql, param);
     }
+
+    public async ValueTask DisposeAsync() => await _dataSource.DisposeAsync();
 }
