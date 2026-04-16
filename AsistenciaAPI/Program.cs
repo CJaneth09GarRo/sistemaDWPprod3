@@ -294,20 +294,18 @@ app.MapPost("/api/profesores", async (CrearUsuarioDto dto, DapperContext db) =>
     if (string.IsNullOrWhiteSpace(correo) || string.IsNullOrWhiteSpace(dto.Nombre) || string.IsNullOrWhiteSpace(dto.Contrasena))
         return Results.BadRequest(new { mensaje = "Correo, nombre y contraseña son obligatorios" });
 
-    var existe = await db.ExecuteScalarAsync<long>(
-        "SELECT COUNT(1) FROM usuario WHERE lower(correo) = @Correo", new { Correo = correo });
-    if (existe > 0)
+    if (await db.ExecuteScalarAsync<long>("SELECT COUNT(1) FROM usuario WHERE lower(correo) = @Correo", new { Correo = correo }) > 0)
         return Results.BadRequest(new { mensaje = "El correo ya está registrado" });
 
-    var rolId = await db.ExecuteScalarAsync<int?>(
-        "SELECT id FROM rol WHERE nombre_rol = 'Maestro'");
-    if (rolId is null) return Results.Problem("Rol Maestro no encontrado", statusCode: 500);
+    // Obtiene rol_id e inserta en una sola query
+    var nuevoId = await db.ExecuteScalarAsync<int?>(
+        @"INSERT INTO usuario (correo, nombre, edad, rol_id, contrasenahash)
+          SELECT @Correo, @Nombre, @Edad, r.id, @Contrasena FROM rol r WHERE r.nombre_rol = 'Maestro'
+          RETURNING id",
+        new { Correo = correo, Nombre = dto.Nombre.Trim(), Edad = dto.Edad, Contrasena = dto.Contrasena });
 
-    await db.ExecuteAsync(
-        "INSERT INTO usuario (correo, nombre, edad, rol_id, contrasenahash) VALUES (@Correo, @Nombre, @Edad, @RolId, @Contrasena)",
-        new { Correo = correo, Nombre = dto.Nombre.Trim(), Edad = dto.Edad, RolId = rolId, Contrasena = dto.Contrasena });
-
-    return Results.Ok(new { mensaje = "Profesor creado exitosamente" });
+    if (nuevoId is null) return Results.Problem("Rol Maestro no encontrado", statusCode: 500);
+    return Results.Ok(new { id = nuevoId, mensaje = "Profesor creado exitosamente" });
 }).RequireAuthorization("AdminOnly");
 
 // ============ ALUMNOS ============
@@ -328,19 +326,16 @@ app.MapPost("/api/alumnos", async (CrearUsuarioDto dto, DapperContext db) =>
     if (string.IsNullOrWhiteSpace(correo) || string.IsNullOrWhiteSpace(dto.Nombre) || string.IsNullOrWhiteSpace(dto.Contrasena))
         return Results.BadRequest(new { mensaje = "Correo, nombre y contraseña son obligatorios" });
 
-    var existe = await db.ExecuteScalarAsync<long>(
-        "SELECT COUNT(1) FROM usuario WHERE lower(correo) = @Correo", new { Correo = correo });
-    if (existe > 0)
+    if (await db.ExecuteScalarAsync<long>("SELECT COUNT(1) FROM usuario WHERE lower(correo) = @Correo", new { Correo = correo }) > 0)
         return Results.BadRequest(new { mensaje = "El correo ya está registrado" });
 
-    var rolId = await db.ExecuteScalarAsync<int?>(
-        "SELECT id FROM rol WHERE nombre_rol = 'Alumno'");
-    if (rolId is null) return Results.Problem("Rol Alumno no encontrado", statusCode: 500);
+    var nuevoId = await db.ExecuteScalarAsync<int?>(
+        @"INSERT INTO usuario (correo, nombre, edad, rol_id, contrasenahash)
+          SELECT @Correo, @Nombre, @Edad, r.id, @Contrasena FROM rol r WHERE r.nombre_rol = 'Alumno'
+          RETURNING id",
+        new { Correo = correo, Nombre = dto.Nombre.Trim(), Edad = dto.Edad, Contrasena = dto.Contrasena });
 
-    var nuevoId = await db.ExecuteScalarAsync<int>(
-        "INSERT INTO usuario (correo, nombre, edad, rol_id, contrasenahash) VALUES (@Correo, @Nombre, @Edad, @RolId, @Contrasena) RETURNING id",
-        new { Correo = correo, Nombre = dto.Nombre.Trim(), Edad = dto.Edad, RolId = rolId, Contrasena = dto.Contrasena });
-
+    if (nuevoId is null) return Results.Problem("Rol Alumno no encontrado", statusCode: 500);
     return Results.Ok(new { id = nuevoId, mensaje = "Alumno creado exitosamente" });
 }).RequireAuthorization("AdminOnly");
 

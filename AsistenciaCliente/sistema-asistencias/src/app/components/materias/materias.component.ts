@@ -414,23 +414,28 @@ export class MateriasComponent implements OnInit {
       return;
     }
 
-    this.guardandoProfesor = true;
-    this.errorProfesor = '';
+    const nombre = this.nuevoProfesor.nombre.trim();
+    const correo = this.nuevoProfesor.correo.trim();
+    const edad = this.nuevoProfesor.edad;
 
-    this.asistenciaService.crearProfesor({
-      nombre: this.nuevoProfesor.nombre.trim(),
-      correo: this.nuevoProfesor.correo.trim(),
-      edad: this.nuevoProfesor.edad,
-      contrasena: this.nuevoProfesor.contrasena
-    }).subscribe({
-      next: () => {
-        this.guardandoProfesor = false;
-        this.cerrarModalProfesor();
-        this.cargarProfesores();
+    // Optimista: agregar con id temporal, seleccionarlo y cerrar el modal de inmediato
+    const tempId = -Date.now();
+    const temp: Profesor = { id: tempId, nombre, correo, edad, rol: 'Maestro' };
+    this.profesores = [...this.profesores, temp].sort((a, b) => a.nombre.localeCompare(b.nombre));
+    this.form.profesorId = tempId;
+    this.cerrarModalProfesor();
+
+    this.asistenciaService.crearProfesor({ nombre, correo, edad, contrasena: this.nuevoProfesor.contrasena }).subscribe({
+      next: (res) => {
+        // Reemplazar id temporal con el real
+        this.profesores = this.profesores.map(p => p.id === tempId ? { ...p, id: res.id } : p);
+        this.form.profesorId = res.id;
       },
       error: (err) => {
-        this.guardandoProfesor = false;
-        this.errorProfesor = err?.error?.mensaje ?? '❌ Error al crear el profesor.';
+        // Revertir
+        this.profesores = this.profesores.filter(p => p.id !== tempId);
+        this.form.profesorId = null;
+        this.error = err?.error?.mensaje ?? '❌ Error al crear el profesor.';
       }
     });
   }
