@@ -1,0 +1,208 @@
+.materias-container {
+  padding: 40px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #f0f2f5 100%);
+  min-height: 100vh;
+}
+.header-card {
+  background: white;
+  border-radius: 20px;
+  padding: 20px 24px;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+  margin-bottom: 24px;
+}
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.header-card h2 { color: #ff6b9d; margin: 0 0 4px; font-size: 1.8rem; }
+.header-card p { color: #888; margin: 0; }
+.btn-nueva {
+  background: linear-gradient(135deg, #ff6b9d, #ff9a9e);
+  color: white;
+  border: none;
+  padding: 10px 22px;
+  border-radius: 25px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+.btn-nueva:hover { transform: scale(1.05); box-shadow: 0 4px 12px rgba(255,107,157,0.3); }
+.loading { text-align: center; padding: 40px; color: #888; }
+.materias-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
+}
+.materia-card {
+  background: white;
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.07);
+  transition: transform 0.2s ease;
+}
+.materia-card:hover { transform: translateY(-3px); }
+.materia-icon { font-size: 2rem; margin-bottom: 10px; }
+.materia-card h3 { color: #333; margin: 0 0 12px; font-size: 1.05rem; }
+.materia-datos { display: flex; flex-direction: column; gap: 6px; }
+.materia-datos span { color: #666; font-size: 0.88rem; }
+.empty-state { text-align: center; padding: 40px; color: #888; }
+.error-message { background: #ffebee; color: #c62828; padding: 12px 14px; border-radius: 12px; margin-top: 12px; }
+.card-actions { display: flex; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
+.btn-alumnos {
+  flex: 1;
+  padding: 7px 10px;
+  border: 2px solid #c3e6fb;
+  border-radius: 20px;
+  background: white;
+  color: #0288d1;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.btn-alumnos:hover { background: #e1f5fe; }
+.btn-editar {
+  flex: 1;
+  padding: 7px 10px;
+  border: 2px solid #ffe0e8;
+  border-radius: 20px;
+  background: white;
+  color: #ff6b9d;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.btn-editar:hover { background: #ffe0e8; }
+.btn-eliminar {
+  padding: 7px 10px;
+  border: none;
+  border-radius: 20px;
+  background: #ffebee;
+  color: #c62828;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.btn-eliminar:hover { background: #ffcdd2; }
+/* Modal alumnos */
+.modal-alumnos { max-width: 480px; }
+.agregar-alumno-row { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; }
+.agregar-alumno-row select { flex: 1; padding: 9px 12px; border: 2px solid #ffe0e8; border-radius: 12px; font-size: 0.9rem; }
+.agregar-alumno-row select:focus { border-color: #ff6b9d; outline: none; }
+.btn-inscribir {
+  padding: 9px 16px;
+  background: linear-gradient(135deg, #ff6b9d, #ff9a9e);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+.btn-inscribir:hover:not(:disabled) { transform: scale(1.04); }
+.btn-inscribir:disabled { opacity: 0.5; cursor: not-allowed; }
+.inscritos-lista { display: flex; flex-direction: column; gap: 6px; max-height: 280px; overflow-y: auto; margin-bottom: 12px; }
+.inscrito-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  background: #f8f9fa;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+.btn-desinscribir {
+  background: none;
+  border: none;
+  color: #c62828;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+.btn-desinscribir:hover { background: #ffcdd2; }
+.todos-inscritos { color: #666; font-size: 0.88rem; margin-bottom: 12px; }
+.empty-state-sm { color: #aaa; font-size: 0.88rem; margin: 8px 0 12px; }
+/* Modal confirm */
+.modal-confirm { text-align: center; }
+.modal-icon { font-size: 2.5rem; margin-bottom: 12px; }
+.modal-confirm h3 { color: #c62828; }
+.modal-confirm p { color: #888; margin: 0 0 20px; }
+
+/* Modales */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-card {
+  background: white;
+  border-radius: 20px;
+  padding: 32px;
+  width: 90%;
+  max-width: 420px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+}
+.modal-card h3 { color: #ff6b9d; margin: 0 0 20px; font-size: 1.2rem; }
+.field-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.field-group label { font-size: 0.82rem; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+.field-group input, .field-group select {
+  padding: 10px 14px;
+  border: 2px solid #ffe0e8;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  transition: border-color 0.2s;
+}
+.field-group input:focus, .field-group select:focus { border-color: #ff6b9d; outline: none; }
+.profesor-row { display: flex; gap: 8px; align-items: center; }
+.profesor-row select { flex: 1; }
+.btn-nuevo-prof {
+  padding: 10px 14px;
+  background: #f0f2f5;
+  border: 2px solid #ddd;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+.btn-nuevo-prof:hover { background: #ffe0e8; border-color: #ff6b9d; }
+.modal-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px; }
+.btn-cancelar {
+  padding: 10px 22px;
+  border: 2px solid #ddd;
+  border-radius: 25px;
+  background: white;
+  color: #666;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.btn-cancelar:hover { border-color: #bbb; color: #333; }
+.btn-confirmar {
+  padding: 10px 22px;
+  border: none;
+  border-radius: 25px;
+  background: linear-gradient(135deg, #ff6b9d, #ff9a9e);
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.btn-confirmar:hover { transform: scale(1.05); box-shadow: 0 4px 12px rgba(255,107,157,0.3); }
+.btn-confirmar:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }

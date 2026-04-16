@@ -1,0 +1,148 @@
+.alumnos-container {
+  padding: 40px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #f0f2f5 100%);
+  min-height: 100vh;
+}
+.header-card {
+  background: white;
+  border-radius: 20px;
+  padding: 20px 24px;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+  margin-bottom: 24px;
+}
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.header-card h2 { color: #ff6b9d; margin: 0 0 4px; font-size: 1.8rem; }
+.header-card p { color: #888; margin: 0; }
+.btn-nuevo {
+  background: linear-gradient(135deg, #ff6b9d, #ff9a9e);
+  color: white;
+  border: none;
+  padding: 10px 22px;
+  border-radius: 25px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+.btn-nuevo:hover { transform: scale(1.05); box-shadow: 0 4px 12px rgba(255,107,157,0.3); }
+.loading { text-align: center; padding: 40px; color: #888; }
+.tabla-wrapper {
+  background: white;
+  border-radius: 20px;
+  padding: 8px;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.07);
+  overflow-x: auto;
+}
+.tabla-alumnos {
+  width: 100%;
+  border-collapse: collapse;
+}
+.tabla-alumnos th {
+  padding: 14px 18px;
+  text-align: left;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #f0f2f5;
+}
+.tabla-alumnos td {
+  padding: 14px 18px;
+  color: #444;
+  border-bottom: 1px solid #f0f2f5;
+  font-size: 0.95rem;
+}
+.tabla-alumnos tr:last-child td { border-bottom: none; }
+.tabla-alumnos tr:hover td { background: #fff8f9; }
+.empty-state { text-align: center; padding: 40px; color: #888; }
+.error-message { background: #ffebee; color: #c62828; padding: 12px 14px; border-radius: 12px; margin-top: 12px; }
+.acciones-col { white-space: nowrap; }
+.btn-editar-sm {
+  padding: 5px 10px;
+  border: 2px solid #ffe0e8;
+  border-radius: 16px;
+  background: white;
+  color: #ff6b9d;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-right: 6px;
+  transition: all 0.2s;
+}
+.btn-editar-sm:hover { background: #ffe0e8; }
+.btn-eliminar-sm {
+  padding: 5px 10px;
+  border: none;
+  border-radius: 16px;
+  background: #ffebee;
+  color: #c62828;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.btn-eliminar-sm:hover { background: #ffcdd2; }
+.modal-confirm { text-align: center; }
+.modal-icon { font-size: 2.5rem; margin-bottom: 12px; }
+.modal-confirm h3 { color: #c62828; }
+.modal-confirm p { color: #888; margin: 0 0 20px; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-card {
+  background: white;
+  border-radius: 20px;
+  padding: 32px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+}
+.modal-card h3 { color: #ff6b9d; margin: 0 0 20px; font-size: 1.2rem; }
+.field-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.field-group label { font-size: 0.82rem; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+.field-group input {
+  padding: 10px 14px;
+  border: 2px solid #ffe0e8;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  transition: border-color 0.2s;
+}
+.field-group input:focus { border-color: #ff6b9d; outline: none; }
+.modal-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px; }
+.btn-cancelar {
+  padding: 10px 22px;
+  border: 2px solid #ddd;
+  border-radius: 25px;
+  background: white;
+  color: #666;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.btn-cancelar:hover { border-color: #bbb; color: #333; }
+.btn-confirmar {
+  padding: 10px 22px;
+  border: none;
+  border-radius: 25px;
+  background: linear-gradient(135deg, #ff6b9d, #ff9a9e);
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.btn-confirmar:hover { transform: scale(1.05); box-shadow: 0 4px 12px rgba(255,107,157,0.3); }
+.btn-confirmar:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
