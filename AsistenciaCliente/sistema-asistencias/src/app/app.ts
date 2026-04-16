@@ -31,6 +31,20 @@ import { AuthService } from './services/auth.service';
                  (mouseleave)="resetEnlace($event)">
             📝 Asistencias
           </a></li>
+          <li *ngIf="authService.isAdmin()">
+            <a routerLink="/materias" routerLinkActive="active"
+               (mouseenter)="animarEnlace($event)"
+               (mouseleave)="resetEnlace($event)">
+              📚 Materias
+            </a>
+          </li>
+          <li *ngIf="authService.isAdmin()">
+            <a routerLink="/alumnos" routerLinkActive="active"
+               (mouseenter)="animarEnlace($event)"
+               (mouseleave)="resetEnlace($event)">
+              👩‍🎓 Alumnos
+            </a>
+          </li>
           <li><button class="logout-btn" (click)="logout()" 
                       (mouseenter)="animarBoton($event)"
                       (mouseleave)="resetBoton($event)">

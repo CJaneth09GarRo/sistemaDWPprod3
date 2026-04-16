@@ -12,6 +12,19 @@ export interface Materia {
   horas_planificadas: number;
 }
 
+export interface MateriaDetalle extends Materia {
+  profesorId: number | null;
+  profesorNombre: string | null;
+}
+
+export interface Profesor {
+  id: number;
+  nombre: string;
+  correo: string;
+  edad: number;
+  rol: string;
+}
+
 export interface Asistencia {
   id: number;
   usuarioId: number;

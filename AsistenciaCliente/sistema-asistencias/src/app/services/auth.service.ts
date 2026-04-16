@@ -57,4 +57,9 @@ export class AuthService {
     const rol = this.getRol().trim().toLowerCase();
     return rol === 'maestro' || rol === 'administrador' || rol === 'admin';
   }
+
+  isAdmin(): boolean {
+    const rol = this.getRol().trim().toLowerCase();
+    return rol === 'administrador' || rol === 'admin';
+  }
 }
